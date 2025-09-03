@@ -1,0 +1,1 @@
+ALTER TABLE "payment_methods" ADD COLUMN "triggers_api_verification" boolean DEFAULT false NOT NULL;

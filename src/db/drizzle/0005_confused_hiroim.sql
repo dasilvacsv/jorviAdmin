@@ -1,0 +1,1 @@
+ALTER TABLE "payment_methods" ADD COLUMN "icon_url" text;

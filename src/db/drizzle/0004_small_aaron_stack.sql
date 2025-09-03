@@ -1,0 +1,1 @@
+ALTER TABLE "payment_methods" ALTER COLUMN "details" DROP NOT NULL;

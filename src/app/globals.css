@@ -1,0 +1,102 @@
+/* Importa la tipografía moderna 'Inter' desde Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* --- TEMA CLARO (Base, sin cambios) --- */
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 38 92% 50%; /* Amber-500 para el tema claro */
+    --primary-foreground: 240 10% 3.9%;
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+    --accent: 30 95% 53%; /* Orange-500 para el tema claro */
+    --accent-foreground: 240 5.9% 10%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+    --ring: 38 92% 50%;
+    --radius: 0.75rem; /* Bordes un poco más redondeados */
+  }
+
+  /* --- NUEVO TEMA OSCURO "PREMIUM AMBER" --- */
+  .dark {
+    --background: 240 10% 3.9%;   /* zinc-950 */
+    --foreground: 0 0% 98%;       /* casi blanco */
+    --card: 240 5.9% 10%;         /* zinc-900 */
+    --card-foreground: 0 0% 98%;  
+    --popover: 240 10% 3.9%;      /* zinc-950 */
+    --popover-foreground: 0 0% 98%;
+    --primary: 38 92% 50%;        /* amber-500 */
+    --primary-foreground: 240 10% 3.9%; /* zinc-950 para texto sobre botones primarios */
+    --secondary: 240 5.2% 16.1%;  /* zinc-800 */
+    --secondary-foreground: 0 0% 98%;
+    --muted: 240 5.2% 16.1%;      /* zinc-800 */
+    --muted-foreground: 240 3.8% 46.1%; /* zinc-400 */
+    --accent: 30 95% 53%;         /* orange-500 */
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%; /* red-900 */
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 5% 26.1%;       /* zinc-700 */
+    --input: 240 5% 26.1%;        /* zinc-700 */
+    --ring: 38 92% 50%;           /* amber-500 para focus rings */
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  
+  html {
+    @apply scroll-smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  
+  /* --- Scrollbar personalizado para el tema oscuro "Premium Amber" --- */
+  ::-webkit-scrollbar {
+    @apply w-2;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-zinc-950;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-zinc-800 rounded-full border-2 border-zinc-950;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-zinc-700;
+  }
+}
+
+/* --- Animaciones y Utilidades Adicionales --- */
+@layer utilities {
+  .animate-pulse-slow {
+    animation: pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  /* Para ocultar la barra de scroll en elementos específicos si es necesario */
+  .scrollbar-hide {
+    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none; /* Firefox */
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none; /* Chrome, Safari, and Opera */
+  }
+}
