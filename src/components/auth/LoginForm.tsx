@@ -18,7 +18,6 @@ export function LoginForm() {
   
   const [error, setError] = useState<string | undefined>('');
   const [isPending, startTransition] = useTransition();
-  const router = useRouter();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,12 +28,13 @@ export function LoginForm() {
     setError('');
 
     startTransition(async () => {
+      // El Server Action `login` ahora maneja la redirección.
+      // Si tiene éxito, no se devuelve nada y el usuario es redirigido.
+      // Si falla, se devuelve el objeto `error` que manejamos aquí.
       const result = await login({ email, password });
       
       if (result?.error) {
         setError(result.error);
-      } else {
-        router.push('/dashboard');
       }
     });
   };
@@ -74,8 +74,6 @@ export function LoginForm() {
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <Label htmlFor="password">Contraseña</Label>
-              {/* Se eliminó el <a> dentro de <Link> para solucionar el error */}
-              
             </div>
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />

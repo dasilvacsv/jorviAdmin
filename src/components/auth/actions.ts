@@ -71,34 +71,38 @@ const LoginSchema = z.object({
  * Esta acción es un 'wrapper' alrededor de la función signIn de NextAuth.
  */
 export async function login(values: z.infer<typeof LoginSchema>) {
-  // 1. Validar campos
-  const validatedFields = LoginSchema.safeParse(values);
+    // 1. Validar campos
+    const validatedFields = LoginSchema.safeParse(values);
 
-  if (!validatedFields.success) {
-    return { error: "Datos inválidos." };
-  }
-  
-  const { email, password } = validatedFields.data;
+    if (!validatedFields.success) {
+        return { error: "Datos inválidos." };
+    }
+    
+    const { email, password } = validatedFields.data;
 
-  try {
-    // 2. Intentar iniciar sesión con NextAuth
-    await signIn('credentials', {
-      email,
-      password,
-      redirect: false, // ¡Cambio clave! Desactiva la redirección del servidor.
-    });
+    try {
+        // 2. Intentar iniciar sesión con NextAuth
+        // Se usa `redirect: false` en signIn, por lo que la redirección
+        // se hará manualmente a continuación.
+        await signIn('credentials', {
+            email,
+            password,
+            redirect: false,
+        });
 
-    return { success: true };
-  } catch (error) {
-    // 3. Manejar errores específicos de NextAuth
-    if (error instanceof AuthError) {
-      switch (error.type) {
-        case 'CredentialsSignin':
-          return { error: 'Credenciales incorrectas.' };
-        default:
-          return { error: 'Algo salió mal.' };
-      }
-    }
-    throw error;
-  }
+        // 3. Redirigir al dashboard en el servidor
+        redirect('/dashboard');
+
+    } catch (error) {
+        // 4. Manejar errores específicos de NextAuth
+        if (error instanceof AuthError) {
+            switch (error.type) {
+                case 'CredentialsSignin':
+                    return { error: 'Credenciales incorrectas.' };
+                default:
+                    return { error: 'Algo salió mal.' };
+            }
+        }
+        throw error;
+    }
 }
