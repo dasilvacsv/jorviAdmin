@@ -4,9 +4,11 @@ const nextConfig = {
       ignoreBuildErrors: true
   },
   eslint: {
-    ignoreDuringBuilds: true   
+    ignoreDuringBuilds: true
   },
   images: {
+      // ✅ Línea añadida para desactivar la optimización de Vercel
+      unoptimized: true,
       remotePatterns: [
         // NUEVO: Patrón para tu servidor de MinIO/S3
         {
