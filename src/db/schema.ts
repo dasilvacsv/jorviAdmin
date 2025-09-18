@@ -86,6 +86,24 @@ export const tickets = pgTable("tickets", {
     };
 });
 
+export const systemSettings = pgTable("system_settings", {
+    id: text("id").primaryKey().$defaultFn(() => createId()),
+    key: varchar("key", { length: 256 }).notNull().unique(), // ej: 'commission_rate', 'default_exchange_rate'
+    value: text("value").notNull(),
+    description: text("description"),
+    isActive: boolean("is_active").default(true).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const raffleExchangeRates = pgTable("raffle_exchange_rates", {
+  id: text("id").primaryKey().$defaultFn(() => createId()),
+  raffleId: text("raffle_id").notNull().references(() => raffles.id, { onDelete: "cascade" }).unique(),
+  usdToVesRate: decimal("usd_to_ves_rate", { precision: 10, scale: 2 }).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 // ----------------------------------------------------------------
 // TABLAS SECUNDARIAS Y DE RELACIÓN
 // ----------------------------------------------------------------
@@ -130,14 +148,26 @@ export const waitlistSubscribers = pgTable("waitlist_subscribers", {
 // RELACIONES
 // ----------------------------------------------------------------
 
+// Relación para la tabla de tasas de cambio
+export const raffleExchangeRateRelations = relations(raffleExchangeRates, ({ one }) => ({
+    raffle: one(raffles, {
+        fields: [raffleExchangeRates.raffleId],
+        references: [raffles.id],
+    }),
+}));
+
 export const raffleRelations = relations(raffles, ({ many, one }) => ({
-  purchases: many(purchases),
-  tickets: many(tickets),
-  images: many(raffleImages),
-  winnerTicket: one(tickets, {
-    fields: [raffles.winnerTicketId],
-    references: [tickets.id],
-  }),
+  purchases: many(purchases),
+  tickets: many(tickets),
+  images: many(raffleImages),
+  winnerTicket: one(tickets, {
+    fields: [raffles.winnerTicketId],
+    references: [tickets.id],
+  }),
+  exchangeRate: one(raffleExchangeRates, {
+    fields: [raffles.id],
+    references: [raffleExchangeRates.raffleId],
+  }),
 }));
 
 export const purchaseRelations = relations(purchases, ({ one, many }) => ({

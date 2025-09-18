@@ -1,6 +1,11 @@
 "use client";
 
-import { useState, useMemo, Fragment } from 'react';
+// --- INICIO DE CAMBIOS PARA PDF: Añadir imports ---
+import { useState, useMemo, Fragment, useEffect } from 'react';
+import { PDFDownloadLink } from '@react-pdf/renderer';
+import { SalesPDF } from './SalesPDF'; // El nuevo componente para el PDF
+// --- FIN DE CAMBIOS PARA PDF ---
+
 import {
   Card, CardContent, CardHeader, CardTitle, CardDescription
 } from '@/components/ui/card';
@@ -20,7 +25,7 @@ import {
 import Link from 'next/link';
 import Image from 'next/image';
 import {
-  ArrowLeft, BarChart2, Calendar as CalendarIcon, ChevronDown, ChevronRight, DollarSign, Filter, Receipt, Search, Ticket, Users, X
+  ArrowLeft, BarChart2, Calendar as CalendarIcon, ChevronDown, ChevronRight, DollarSign, Filter, Receipt, Search, Ticket, Users, X, Download, Loader2 // Añadir Download y Loader2
 } from 'lucide-react';
 import { format, isSameDay } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -60,8 +65,8 @@ const getStatusBadge = (status: string | null) => {
 // --- Sub-Componente para el contenido colapsable ---
 function SaleDetailContent({ row }: { row: Row<PurchaseWithTicketsAndRaffle> }) {
     const sale = row.original;
-    const sortedTickets = useMemo(() => 
-      [...sale.tickets].sort((a, b) => a.ticketNumber.localeCompare(b.ticketNumber, undefined, { numeric: true })), 
+    const sortedTickets = useMemo(() =>
+      [...sale.tickets].sort((a, b) => a.ticketNumber.localeCompare(b.ticketNumber, undefined, { numeric: true })),
       [sale.tickets]
     );
 
@@ -80,16 +85,16 @@ function SaleDetailContent({ row }: { row: Row<PurchaseWithTicketsAndRaffle> }) 
             <div className="md:col-span-1">
                  <h4 className="font-semibold text-sm mb-2">Detalles del Pago</h4>
                  <div className="text-sm space-y-1">
-                    <p><span className="text-muted-foreground">Método:</span> {sale.paymentMethod || 'N/A'}</p>
-                    <p><span className="text-muted-foreground">Ref:</span> {sale.paymentReference || 'N/A'}</p>
+                     <p><span className="text-muted-foreground">Método:</span> {sale.paymentMethod || 'N/A'}</p>
+                     <p><span className="text-muted-foreground">Ref:</span> {sale.paymentReference || 'N/A'}</p>
                  </div>
             </div>
             <div className="md:col-span-1">
                  <h4 className="font-semibold text-sm mb-2">Comprobante</h4>
                  {sale.paymentScreenshotUrl ? (
-                    <a href={sale.paymentScreenshotUrl} target="_blank" rel="noopener noreferrer">
-                        <Image src={sale.paymentScreenshotUrl} alt="Comprobante" width={150} height={150} className="rounded-md border object-cover hover:opacity-80 transition-opacity" />
-                    </a>
+                     <a href={sale.paymentScreenshotUrl} target="_blank" rel="noopener noreferrer">
+                         <Image src={sale.paymentScreenshotUrl} alt="Comprobante" width={150} height={150} className="rounded-md border object-cover hover:opacity-80 transition-opacity" />
+                     </a>
                  ) : <p className="text-sm text-muted-foreground italic">Sin comprobante.</p>}
             </div>
         </div>
@@ -99,13 +104,20 @@ function SaleDetailContent({ row }: { row: Row<PurchaseWithTicketsAndRaffle> }) 
 // --- Componente principal de la vista de ventas ---
 export function RaffleSalesView({ initialSalesData }: { initialSalesData: RaffleSalesData }) {
   const { raffle, sales } = initialSalesData;
-  
+
   // Estados para los filtros
   const [date, setDate] = useState<Date | undefined>();
   const [globalFilter, setGlobalFilter] = useState('');
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [sorting, setSorting] = useState<SortingState>([{ id: 'createdAt', desc: true }]);
-  
+
+  // --- INICIO DE CAMBIOS PARA PDF: Estado para renderizado en cliente ---
+  const [isClient, setIsClient] = useState(false);
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+  // --- FIN DE CAMBIOS PARA PDF ---
+
   // Memoización para optimizar el rendimiento de los filtros y estadísticas
   const filteredSales = useMemo(() => {
     let filtered = sales;
@@ -123,7 +135,7 @@ export function RaffleSalesView({ initialSalesData }: { initialSalesData: Raffle
         sale.buyerEmail.toLowerCase().includes(lowercasedFilter)
       );
     }
-    
+
     // Filtros de columna (estado, método de pago)
     columnFilters.forEach(filter => {
       const { id, value } = filter;
@@ -139,15 +151,15 @@ export function RaffleSalesView({ initialSalesData }: { initialSalesData: Raffle
     const totalSales = filteredSales.length;
     const confirmedSales = filteredSales.filter(s => s.status === 'confirmed');
     const pendingSales = filteredSales.filter(s => s.status === 'pending');
-    
+
     const totalRevenue = confirmedSales.reduce((acc, sale) => acc + parseFloat(sale.amount), 0);
     const totalTicketsSold = confirmedSales.reduce((acc, sale) => acc + sale.ticketCount, 0);
     const pendingRevenue = pendingSales.reduce((acc, sale) => acc + parseFloat(sale.amount), 0);
     const progress = (totalTicketsSold / 10000) * 100;
-    
+
     return { totalSales, totalRevenue, totalTicketsSold, pendingRevenue, progress };
   }, [filteredSales]);
-  
+
   const uniquePaymentMethods = useMemo(() => {
     const methods = new Set(sales.map(s => s.paymentMethod).filter(Boolean));
     return Array.from(methods) as string[];
@@ -235,7 +247,7 @@ export function RaffleSalesView({ initialSalesData }: { initialSalesData: Raffle
         <Link href={`/rifas/${raffle.id}`} className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 transition-colors mb-6">
           <ArrowLeft className="h-4 w-4" /> Volver a la Rifa
         </Link>
-        
+
         <div className="space-y-2 mb-8">
             <h1 className="text-3xl font-bold text-gray-900">Módulo de Ventas</h1>
             <p className="text-gray-600">Análisis detallado de todas las ventas para la rifa: <span className="font-semibold text-orange-600">{raffle.name}</span></p>
@@ -276,16 +288,14 @@ export function RaffleSalesView({ initialSalesData }: { initialSalesData: Raffle
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                         <Input placeholder="Buscar por nombre o email..." value={globalFilter} onChange={(e) => setGlobalFilter(e.target.value)} className="pl-10" />
                     </div>
-                    <div className="flex gap-2 w-full md:w-auto">
+                    <div className="flex gap-2 w-full md:w-auto flex-wrap">
                         <Popover>
-                            <PopoverTrigger asChild>
-                                <Button variant="outline" className="w-full justify-start text-left font-normal"><CalendarIcon className="mr-2 h-4 w-4" />{date ? format(date, "PPP", { locale: es }) : <span>Filtrar por fecha</span>}</Button>
-                            </PopoverTrigger>
+                            <PopoverTrigger asChild><Button variant="outline" className="flex-grow justify-start text-left font-normal"><CalendarIcon className="mr-2 h-4 w-4" />{date ? format(date, "PPP", { locale: es }) : <span>Filtrar fecha</span>}</Button></PopoverTrigger>
                             <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={date} onSelect={setDate} initialFocus /></PopoverContent>
                         </Popover>
-                        
+
                         <DropdownMenu>
-                          <DropdownMenuTrigger asChild><Button variant="outline"><Filter className="mr-2 h-4 w-4" />Filtros</Button></DropdownMenuTrigger>
+                          <DropdownMenuTrigger asChild><Button variant="outline" className="flex-grow"><Filter className="mr-2 h-4 w-4" />Filtros</Button></DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuLabel>Estado</DropdownMenuLabel>
                             <DropdownMenuSeparator />
@@ -303,8 +313,8 @@ export function RaffleSalesView({ initialSalesData }: { initialSalesData: Raffle
                                 <DropdownMenuSeparator />
                                 {uniquePaymentMethods.map(method => (
                                   <DropdownMenuCheckboxItem key={method} checked={paymentMethodFilterValues.includes(method)} onCheckedChange={(checked) => {
-                                     const newFilter = checked ? [...paymentMethodFilterValues, method] : paymentMethodFilterValues.filter(m => m !== method);
-                                     table.getColumn('paymentMethod')?.setFilterValue(newFilter);
+                                      const newFilter = checked ? [...paymentMethodFilterValues, method] : paymentMethodFilterValues.filter(m => m !== method);
+                                      table.getColumn('paymentMethod')?.setFilterValue(newFilter);
                                   }}>
                                     {method}
                                   </DropdownMenuCheckboxItem>
@@ -315,8 +325,24 @@ export function RaffleSalesView({ initialSalesData }: { initialSalesData: Raffle
                         </DropdownMenu>
 
                         {(date || globalFilter || columnFilters.length > 0) && (
-                            <Button variant="ghost" onClick={resetFilters}><X className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="icon" onClick={resetFilters}><X className="h-4 w-4" /></Button>
                         )}
+
+                        {/* --- INICIO DE CAMBIOS PARA PDF: Botón de descarga --- */}
+                        {isClient && (
+                          <PDFDownloadLink
+                            document={<SalesPDF sales={filteredSales} stats={statistics} raffle={raffle} filterDate={date} />}
+                            fileName={`reporte-ventas-${raffle.name.replace(/\s+/g, '_')}-${format(new Date(), 'yyyy-MM-dd')}.pdf`}
+                          >
+                            {({ loading }) => (
+                              <Button variant="secondary" className="flex-grow" disabled={loading}>
+                                {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                                Exportar PDF
+                              </Button>
+                            )}
+                          </PDFDownloadLink>
+                        )}
+                        {/* --- FIN DE CAMBIOS PARA PDF --- */}
                     </div>
                 </div>
 
