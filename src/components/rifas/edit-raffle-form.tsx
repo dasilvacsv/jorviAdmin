@@ -184,8 +184,10 @@ export function EditRaffleForm({ raffle, onCancel }: { raffle: RaffleWithImages;
                 </div>
               </div>
               <div>
-                <Label htmlFor="minimumTickets">Tickets mínimos (Máx. 9999)</Label>
-                <Input id="minimumTickets" name="minimumTickets" type="number" min="1" max="9999" required disabled={isPending} defaultValue={raffle.minimumTickets} className="mt-1" />
+                {/* --- CAMBIO 1: Texto de la etiqueta actualizado --- */}
+                <Label htmlFor="minimumTickets">Tickets mínimos (Máx. 10000)</Label>
+                {/* --- CAMBIO 2: Atributo max del input actualizado --- */}
+                <Input id="minimumTickets" name="minimumTickets" type="number" min="1" max="10000" required disabled={isPending} defaultValue={raffle.minimumTickets} className="mt-1" />
               </div>
             </div>
             {/* --- FIN SECCIÓN MODIFICADA --- */}
@@ -234,53 +236,53 @@ export function EditRaffleForm({ raffle, onCancel }: { raffle: RaffleWithImages;
           </div>
           
           <div className="space-y-4">
-             <div>
-               <Label>Imágenes Actuales</Label>
-               {existingImages.length > 0 ? (
-                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-2 p-4 border rounded-md">
-                   {existingImages.map((image) => (
-                     <div key={image.id} className="relative group">
-                       <Image src={image.url} alt="Imagen existente" width={150} height={150} className="rounded-md object-cover aspect-square"/>
-                       <button type="button" onClick={() => removeExistingImage(image.id)} className="absolute top-1 right-1 bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                         <X className="h-3 w-3" />
-                       </button>
-                     </div>
-                   ))}
-                 </div>
-               ) : <p className="text-sm text-gray-500 mt-2">No hay imágenes existentes.</p>}
-             </div>
+              <div>
+                <Label>Imágenes Actuales</Label>
+                {existingImages.length > 0 ? (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-2 p-4 border rounded-md">
+                    {existingImages.map((image) => (
+                      <div key={image.id} className="relative group">
+                        <Image src={image.url} alt="Imagen existente" width={150} height={150} className="rounded-md object-cover aspect-square"/>
+                        <button type="button" onClick={() => removeExistingImage(image.id)} className="absolute top-1 right-1 bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : <p className="text-sm text-gray-500 mt-2">No hay imágenes existentes.</p>}
+              </div>
 
-             <div>
-               <Label htmlFor="file-upload">Añadir Nuevas Imágenes</Label>
-               <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
-                 <div className="space-y-1 text-center">
-                   <UploadCloud className="mx-auto h-12 w-12 text-gray-400" />
-                   <div className="flex text-sm text-gray-600">
-                     <Label htmlFor="file-upload" className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500">
-                       <span>Sube tus archivos</span>
-                       <Input id="file-upload" type="file" className="sr-only" multiple accept="image/*" onChange={handleFileChange} disabled={isPending}/>
-                     </Label>
-                     <p className="pl-1">o arrástralos aquí</p>
-                   </div>
-                 </div>
-               </div>
-             </div>
+              <div>
+                <Label htmlFor="file-upload">Añadir Nuevas Imágenes</Label>
+                <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
+                  <div className="space-y-1 text-center">
+                    <UploadCloud className="mx-auto h-12 w-12 text-gray-400" />
+                    <div className="flex text-sm text-gray-600">
+                      <Label htmlFor="file-upload" className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500">
+                        <span>Sube tus archivos</span>
+                        <Input id="file-upload" type="file" className="sr-only" multiple accept="image/*" onChange={handleFileChange} disabled={isPending}/>
+                      </Label>
+                      <p className="pl-1">o arrástralos aquí</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
 
-             {previews.length > 0 && (
-               <div>
-                 <Label>Nuevas Imágenes (Vista Previa)</Label>
-                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-2 p-4 border rounded-md">
-                   {previews.map((src, index) => (
-                     <div key={src} className="relative group">
-                       <Image src={src} alt={`Preview ${index}`} width={150} height={150} className="rounded-md object-cover aspect-square" />
-                       <button type="button" onClick={() => removeNewImage(index)} className="absolute top-1 right-1 bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                         <X className="h-3 w-3" />
-                       </button>
-                     </div>
-                   ))}
-                 </div>
-               </div>
-             )}
+              {previews.length > 0 && (
+                <div>
+                  <Label>Nuevas Imágenes (Vista Previa)</Label>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-2 p-4 border rounded-md">
+                    {previews.map((src, index) => (
+                      <div key={src} className="relative group">
+                        <Image src={src} alt={`Preview ${index}`} width={150} height={150} className="rounded-md object-cover aspect-square" />
+                        <button type="button" onClick={() => removeNewImage(index)} className="absolute top-1 right-1 bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
           </div>
 
           <div className="flex gap-4 border-t pt-6">

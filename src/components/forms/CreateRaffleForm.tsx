@@ -15,7 +15,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-// --- NUEVO: Imports para el selector de moneda ---
 import {
   Select,
   SelectContent,
@@ -23,7 +22,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-// --- FIN NUEVO ---
 
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
@@ -42,9 +40,7 @@ export function CreateRaffleForm() {
   const [time, setTime] = useState('');
   const hiddenDateInputRef = useRef<HTMLInputElement>(null);
 
-  // --- NUEVO: Estado para la moneda seleccionada ---
   const [currency, setCurrency] = useState<'USD' | 'VES'>('USD');
-  // --- FIN NUEVO ---
 
   useEffect(() => {
     if (state.success) {
@@ -144,7 +140,6 @@ export function CreateRaffleForm() {
               </div>
             )}
             
-            {/* --- SECCIÓN MODIFICADA: Moneda y Precio --- */}
             <div className="grid md:grid-cols-2 gap-4">
               <div className="flex items-start gap-2">
                 <div className="w-1/3">
@@ -181,11 +176,11 @@ export function CreateRaffleForm() {
                 </div>
               </div>
               <div>
-                <Label htmlFor="minimumTickets">Tickets mínimos (Máx. 9999)</Label>
-                <Input id="minimumTickets" name="minimumTickets" type="number" min="1" max="9999" required disabled={isPending} className="mt-1" placeholder="9999" />
+                {/* --- CAMBIO REALIZADO AQUÍ --- */}
+                <Label htmlFor="minimumTickets">Tickets mínimos (Máx. 10000)</Label>
+                <Input id="minimumTickets" name="minimumTickets" type="number" min="1" max="10000" required disabled={isPending} className="mt-1" placeholder="10000" />
               </div>
             </div>
-            {/* --- FIN SECCIÓN MODIFICADA --- */}
             
             <div>
               <Label>Fecha y Hora Límite del Sorteo</Label>
