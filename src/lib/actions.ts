@@ -23,6 +23,7 @@ import { uploadToS3, deleteFromS3 } from "./s3";
 import crypto from "crypto";
 import { Resend } from "resend";
 import { sendWhatsappMessage } from "@/features/whatsapp/actions";
+import { RaffleSalesData, PurchaseWithTicketsAndRaffle } from "./types";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -69,6 +70,52 @@ export async function registerAction(prevState: ActionState, formData: FormData)
     console.error("Error al registrar usuario:", error);
     return { success: false, message: "Error del servidor" };
   }
+}
+
+// --- NUEVA ACCIÓN: OBTENER VENTAS DETALLADAS PARA UNA RIFA ---
+export async function getSalesForRaffle(raffleId: string): Promise<RaffleSalesData | null> {
+  try {
+    const raffleDetails = await db.query.raffles.findFirst({
+      where: eq(raffles.id, raffleId),
+      columns: {
+        id: true,
+        name: true,
+        currency: true,
+        price: true,
+      }
+    });
+
+    if (!raffleDetails) {
+      return null;
+    }
+
+    const sales = await db.query.purchases.findMany({
+      where: eq(purchases.raffleId, raffleId),
+      orderBy: desc(purchases.createdAt),
+      with: {
+        tickets: {
+          columns: {
+            ticketNumber: true,
+          }
+        },
+      },
+    });
+
+    // Unimos los datos para que el componente cliente tenga todo lo que necesita
+    const salesWithRaffleInfo = sales.map(sale => ({
+      ...sale,
+      raffle: raffleDetails, // Adjuntamos la info de la rifa a cada venta
+    }));
+
+    return {
+      raffle: raffleDetails,
+      sales: salesWithRaffleInfo as PurchaseWithTicketsAndRaffle[],
+    };
+
+  } catch (error) {
+    console.error("Error al obtener las ventas de la rifa:", error);
+    return null;
+  }
 }
 
 // ✅ --- NUEVA FUNCIÓN: ENVIAR NOTIFICACIÓN DE RECHAZO ---

@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ArrowLeft, Users, DollarSign, Ticket, Crown, Loader2, Edit, Receipt, Calendar as CalendarIcon, AlertCircle, AlertTriangle, Search, Star, ChevronDown, Phone, MessageSquare } from 'lucide-react';
+import { ArrowLeft, Users, DollarSign, Ticket, Crown, Loader2, Edit, Receipt, Calendar as CalendarIcon, AlertCircle, AlertTriangle, Search, Star, ChevronDown, Phone, MessageSquare, BarChart2 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { ImageCarousel } from './image-carousel';
@@ -609,6 +609,15 @@ export function RaffleDetailView({
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-2xl"><Ticket className="h-6 w-6" /> Gestión de la Rifa</CardTitle>
                     <CardDescription>Visualiza los datos por tickets individuales o por ventas consolidadas.</CardDescription>
+                    <div>
+            {/* --- BOTÓN AÑADIDO --- */}
+            <Link href={`/rifas/${raffle.id}/ventas`} passHref>
+                <Button variant="outline">
+                    <BarChart2 className="mr-2 h-4 w-4" />
+                    Analizar Ventas
+                </Button>
+            </Link>
+        </div>
                 </CardHeader>
                 <CardContent>
                   <Tabs defaultValue="tickets" className="w-full">
