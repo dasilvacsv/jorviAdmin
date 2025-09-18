@@ -11,6 +11,7 @@ import {
   Users,
   LogOut,
   Menu,
+  Settings,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Session } from 'next-auth';
@@ -26,6 +27,7 @@ export function Sidebar({ session }: SidebarProps) {
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Rifas', href: '/rifas', icon: Gift },
     { name: 'Usuarios', href: '/usuarios', icon: Users },
+    { name: 'Configuración', href: '/settings', icon: Settings }, // Añadido
   ];
 
   return (
