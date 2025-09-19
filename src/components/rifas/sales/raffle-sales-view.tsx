@@ -1,14 +1,15 @@
 "use client";
 
-// --- INICIO DE CAMBIOS PARA PDF: Añadir imports ---
 import { useState, useMemo, Fragment, useEffect } from 'react';
 import { PDFDownloadLink } from '@react-pdf/renderer';
-import { SalesPDF } from './SalesPDF'; // El nuevo componente para el PDF
-// --- FIN DE CAMBIOS PARA PDF ---
+import { SalesPDF } from './SalesPDF';
+import Link from 'next/link';
+import Image from 'next/image';
+import { format, isSameDay } from 'date-fns';
+import { es } from 'date-fns/locale';
 
-import {
-  Card, CardContent, CardHeader, CardTitle, CardDescription
-} from '@/components/ui/card';
+// --- UI Components ---
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,118 +17,101 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Progress } from "@/components/ui/progress";
-import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator
-} from "@/components/ui/dropdown-menu";
-import {
-  Collapsible, CollapsibleContent, CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import Link from 'next/link';
-import Image from 'next/image';
-import {
-  ArrowLeft, BarChart2, Calendar as CalendarIcon, ChevronDown, ChevronRight, DollarSign, Filter, Receipt, Search, Ticket, Users, X, Download, Loader2 // Añadir Download y Loader2
-} from 'lucide-react';
-import { format, isSameDay } from 'date-fns';
-import { es } from 'date-fns/locale';
-import {
-  ColumnDef,
-  flexRender,
-  getCoreRowModel,
-  getFilteredRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
-  useReactTable,
-  SortingState,
-  ColumnFiltersState,
-  Row,
-} from "@tanstack/react-table";
-import { PurchaseDetailsModal } from '../purchase-details-modal'; // Reutilizamos el modal existente
-import { RaffleSalesData, PurchaseWithTicketsAndRaffle } from '@/lib/types'; // Importamos los tipos
+import { DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+
+// --- Icons ---
+import { ArrowLeft, Calendar as CalendarIcon, ChevronDown, ChevronRight, DollarSign, Filter, Receipt, Search, Ticket, X, Download, Loader2, Clock } from 'lucide-react';
+
+// --- Types ---
+import { RaffleSalesData, PurchaseWithTicketsAndRaffle } from '@/lib/types';
+import { ColumnDef, flexRender, getCoreRowModel, getFilteredRowModel, getPaginationRowModel, getSortedRowModel, useReactTable, SortingState, ColumnFiltersState, Row } from "@tanstack/react-table";
+import { PurchaseDetailsModal } from '../purchase-details-modal';
 
 // --- Helper Functions ---
 const formatCurrency = (amount: number | string, currency: 'USD' | 'VES') => {
   const value = typeof amount === 'string' ? parseFloat(amount) : amount;
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: currency,
-  }).format(value);
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(value);
 };
 
 const getStatusBadge = (status: string | null) => {
-  switch (status) {
-    case 'confirmed': return <Badge className="bg-green-100 text-green-800 border-green-300">Confirmado</Badge>;
-    case 'pending': return <Badge className="bg-yellow-100 text-yellow-800 border-yellow-300">Pendiente</Badge>;
-    case 'rejected': return <Badge className="bg-red-100 text-red-800 border-red-300">Rechazado</Badge>;
-    default: return null;
-  }
+  const statusMap = {
+    confirmed: "bg-green-100 text-green-800 border-green-300",
+    pending: "bg-yellow-100 text-yellow-800 border-yellow-300",
+    rejected: "bg-red-100 text-red-800 border-red-300",
+  };
+  const textMap = { confirmed: 'Confirmado', pending: 'Pendiente', rejected: 'Rechazado' };
+  
+  if (!status || !statusMap[status as keyof typeof statusMap]) return null;
+  
+  return <Badge className={`${statusMap[status as keyof typeof statusMap]} hover:bg-opacity-80`}>{textMap[status as keyof typeof textMap]}</Badge>;
 };
 
-// --- Sub-Componente para el contenido colapsable ---
-function SaleDetailContent({ row }: { row: Row<PurchaseWithTicketsAndRaffle> }) {
-    const sale = row.original;
-    const sortedTickets = useMemo(() =>
-      [...sale.tickets].sort((a, b) => a.ticketNumber.localeCompare(b.ticketNumber, undefined, { numeric: true })),
-      [sale.tickets]
-    );
-
-    return (
-        <div className="p-4 bg-slate-50 grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="md:col-span-1">
-                <h4 className="font-semibold text-sm mb-2">Tickets Asignados ({sale.tickets.length})</h4>
-                {sortedTickets.length > 0 ? (
-                    <div className="max-h-32 overflow-y-auto pr-2 grid grid-cols-4 sm:grid-cols-5 md:grid-cols-4 gap-1">
-                        {sortedTickets.map(({ ticketNumber }) => (
-                            <Badge key={ticketNumber} variant="secondary" className="font-mono flex-shrink-0 justify-center">{ticketNumber}</Badge>
-                        ))}
-                    </div>
-                ) : <p className="text-sm text-muted-foreground italic">Aún no hay tickets asignados.</p>}
-            </div>
-            <div className="md:col-span-1">
-                 <h4 className="font-semibold text-sm mb-2">Detalles del Pago</h4>
-                 <div className="text-sm space-y-1">
-                     <p><span className="text-muted-foreground">Método:</span> {sale.paymentMethod || 'N/A'}</p>
-                     <p><span className="text-muted-foreground">Ref:</span> {sale.paymentReference || 'N/A'}</p>
-                 </div>
-            </div>
-            <div className="md:col-span-1">
-                 <h4 className="font-semibold text-sm mb-2">Comprobante</h4>
-                 {sale.paymentScreenshotUrl ? (
-                     <a href={sale.paymentScreenshotUrl} target="_blank" rel="noopener noreferrer">
-                         <Image src={sale.paymentScreenshotUrl} alt="Comprobante" width={150} height={150} className="rounded-md border object-cover hover:opacity-80 transition-opacity" />
-                     </a>
-                 ) : <p className="text-sm text-muted-foreground italic">Sin comprobante.</p>}
-            </div>
-        </div>
-    );
+// --- Sub-Components Optimizados ---
+function StatCard({ icon: Icon, title, value, colorClass = 'text-gray-600' }: { icon: React.ElementType, title: string, value: string | number, colorClass?: string }) {
+  const bgColorClass = colorClass.replace('text', 'bg').replace(/-\d+$/, '-100');
+  return (
+    <div className="bg-white p-3 rounded-lg shadow-sm flex items-center gap-4 transition-transform hover:scale-105">
+      <div className={`p-2 rounded-full ${bgColorClass}`}>
+        <Icon className={`h-5 w-5 ${colorClass}`} />
+      </div>
+      <div>
+        <p className="text-xs text-muted-foreground">{title}</p>
+        <p className="text-lg font-bold">{value}</p>
+      </div>
+    </div>
+  );
 }
 
-// --- Componente principal de la vista de ventas ---
+function SaleDetailContent({ row }: { row: Row<PurchaseWithTicketsAndRaffle> }) {
+  const sale = row.original;
+  const sortedTickets = useMemo(() =>
+    [...sale.tickets].sort((a, b) => a.ticketNumber.localeCompare(b.ticketNumber, undefined, { numeric: true })),
+    [sale.tickets]
+  );
+
+  return (
+    <div className="p-4 bg-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div>
+        <h4 className="font-semibold text-xs mb-2 text-gray-700 uppercase tracking-wider">Tickets ({sale.tickets.length})</h4>
+        {sortedTickets.length > 0 ? (
+          <div className="max-h-28 overflow-y-auto pr-2 flex flex-wrap gap-1">
+            {sortedTickets.map(({ ticketNumber }) => (
+              <Badge key={ticketNumber} variant="secondary" className="font-mono text-xs">{ticketNumber}</Badge>
+            ))}
+          </div>
+        ) : <p className="text-sm text-muted-foreground italic">Sin tickets asignados.</p>}
+      </div>
+      <div>
+        <h4 className="font-semibold text-xs mb-2 text-gray-700 uppercase tracking-wider">Detalles del Pago</h4>
+        <div className="text-sm space-y-1">
+          <p><span className="text-muted-foreground">Método:</span> {sale.paymentMethod || 'N/A'}</p>
+          <p><span className="text-muted-foreground">Ref:</span> {sale.paymentReference || 'N/A'}</p>
+           {sale.paymentScreenshotUrl ? (
+            <a href={sale.paymentScreenshotUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline mt-2 inline-block">Ver Comprobante</a>
+           ) : <p className="text-sm text-muted-foreground italic mt-2">Sin comprobante.</p>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// --- Componente Principal ---
 export function RaffleSalesView({ initialSalesData }: { initialSalesData: RaffleSalesData }) {
   const { raffle, sales } = initialSalesData;
-
-  // Estados para los filtros
+  const [isClient, setIsClient] = useState(false);
   const [date, setDate] = useState<Date | undefined>();
   const [globalFilter, setGlobalFilter] = useState('');
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [sorting, setSorting] = useState<SortingState>([{ id: 'createdAt', desc: true }]);
 
-  // --- INICIO DE CAMBIOS PARA PDF: Estado para renderizado en cliente ---
-  const [isClient, setIsClient] = useState(false);
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
-  // --- FIN DE CAMBIOS PARA PDF ---
+  useEffect(() => { setIsClient(true); }, []);
 
-  // Memoización para optimizar el rendimiento de los filtros y estadísticas
   const filteredSales = useMemo(() => {
     let filtered = sales;
-
-    // Filtro de fecha
     if (date) {
       filtered = filtered.filter(sale => isSameDay(new Date(sale.createdAt), date));
     }
-
-    // Filtro de texto global
     if (globalFilter) {
       const lowercasedFilter = globalFilter.toLowerCase();
       filtered = filtered.filter(sale =>
@@ -135,88 +119,49 @@ export function RaffleSalesView({ initialSalesData }: { initialSalesData: Raffle
         sale.buyerEmail.toLowerCase().includes(lowercasedFilter)
       );
     }
-
-    // Filtros de columna (estado, método de pago)
     columnFilters.forEach(filter => {
       const { id, value } = filter;
-      if(value && Array.isArray(value) && value.length > 0) {
+      if (Array.isArray(value) && value.length > 0) {
         filtered = filtered.filter(sale => value.includes((sale as any)[id]));
       }
     });
-
     return filtered;
   }, [sales, date, globalFilter, columnFilters]);
 
   const statistics = useMemo(() => {
-    const totalSales = filteredSales.length;
     const confirmedSales = filteredSales.filter(s => s.status === 'confirmed');
     const pendingSales = filteredSales.filter(s => s.status === 'pending');
-
     const totalRevenue = confirmedSales.reduce((acc, sale) => acc + parseFloat(sale.amount), 0);
     const totalTicketsSold = confirmedSales.reduce((acc, sale) => acc + sale.ticketCount, 0);
     const pendingRevenue = pendingSales.reduce((acc, sale) => acc + parseFloat(sale.amount), 0);
-    const progress = (totalTicketsSold / 10000) * 100;
+    const progress = raffle.totalTickets > 0 ? (totalTicketsSold / raffle.totalTickets) * 100 : 0;
+    return { totalSales: filteredSales.length, totalRevenue, totalTicketsSold, pendingRevenue, progress };
+  }, [filteredSales, raffle.totalTickets]);
 
-    return { totalSales, totalRevenue, totalTicketsSold, pendingRevenue, progress };
-  }, [filteredSales]);
-
-  const uniquePaymentMethods = useMemo(() => {
-    const methods = new Set(sales.map(s => s.paymentMethod).filter(Boolean));
-    return Array.from(methods) as string[];
-  }, [sales]);
-
-
-  // Definición de columnas para TanStack Table
   const columns: ColumnDef<PurchaseWithTicketsAndRaffle>[] = useMemo(() => [
     {
-      id: 'expander',
-      header: () => null,
-      cell: ({ row }) => (
-        <CollapsibleTrigger asChild>
-          <Button variant="ghost" size="sm">
-            {row.getIsExpanded() ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-          </Button>
-        </CollapsibleTrigger>
-      ),
-    },
-    {
-      accessorKey: 'buyerName',
+      accessorKey: 'buyerInfo',
       header: 'Comprador',
       cell: ({ row }) => {
         const sale = row.original;
         return (
           <div>
-            <div className="font-medium">{sale.buyerName || 'N/A'}</div>
+            <div className="font-medium text-slate-900">{sale.buyerName || 'N/A'}</div>
             <div className="text-xs text-muted-foreground">{sale.buyerEmail}</div>
           </div>
         );
       }
     },
-    {
-      accessorKey: 'status',
-      header: 'Estado',
-      cell: ({ row }) => getStatusBadge(row.getValue("status")),
-    },
-    {
-      accessorKey: 'createdAt',
-      header: 'Fecha',
-      cell: ({ row }) => format(new Date(row.getValue("createdAt")), "dd MMM yyyy, hh:mm a", { locale: es }),
+    { accessorKey: 'status', header: 'Estado', cell: ({ row }) => getStatusBadge(row.getValue("status")) },
+    { 
+      accessorKey: 'createdAt', 
+      header: 'Fecha', 
+      cell: ({ row }) => format(new Date(row.getValue("createdAt")), "dd MMM yy, hh:mm a", { locale: es }),
       sortingFn: 'datetime'
     },
-    {
-      accessorKey: 'ticketCount',
-      header: 'Tickets',
-      cell: ({ row }) => <div className="text-center font-bold">{row.getValue("ticketCount")}</div>
-    },
-    {
-      accessorKey: 'amount',
-      header: 'Monto',
-      cell: ({ row }) => <div className="font-semibold">{formatCurrency(row.getValue("amount"), raffle.currency)}</div>
-    },
-    {
-      id: 'actions',
-      cell: ({ row }) => <PurchaseDetailsModal purchase={row.original as any} />,
-    },
+    { accessorKey: 'ticketCount', header: 'Tickets', cell: ({ row }) => <div className="text-center font-bold">{row.getValue("ticketCount")}</div> },
+    { accessorKey: 'amount', header: 'Monto', cell: ({ row }) => <div className="font-semibold">{formatCurrency(row.getValue("amount"), raffle.currency)}</div> },
+    { id: 'actions', cell: ({ row }) => <div className="text-right"><PurchaseDetailsModal purchase={row.original as any} /></div> },
   ], [raffle.currency]);
 
   const table = useReactTable({
@@ -236,162 +181,191 @@ export function RaffleSalesView({ initialSalesData }: { initialSalesData: Raffle
     setDate(undefined);
     setGlobalFilter('');
     setColumnFilters([]);
-  }
+  };
 
-  const statusFilterValues = table.getColumn('status')?.getFilterValue() as string[] ?? [];
-  const paymentMethodFilterValues = table.getColumn('paymentMethod')?.getFilterValue() as string[] ?? [];
+  const isFiltered = date || globalFilter || columnFilters.length > 0;
 
   return (
-    <div className="bg-slate-50 min-h-screen">
-      <div className="max-w-7xl mx-auto px-4 py-8 md:py-12">
-        <Link href={`/rifas/${raffle.id}`} className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 transition-colors mb-6">
+    <div className="bg-gray-50 min-h-screen">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 md:py-10">
+        <Link href={`/rifas/${raffle.id}`} className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 mb-4">
           <ArrowLeft className="h-4 w-4" /> Volver a la Rifa
         </Link>
 
-        <div className="space-y-2 mb-8">
-            <h1 className="text-3xl font-bold text-gray-900">Módulo de Ventas</h1>
-            <p className="text-gray-600">Análisis detallado de todas las ventas para la rifa: <span className="font-semibold text-orange-600">{raffle.name}</span></p>
-        </div>
+        <header className="space-y-1 mb-6">
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-gray-900">Módulo de Ventas</h1>
+          <p className="text-md text-gray-600">
+            Análisis de la rifa: <span className="font-semibold text-orange-600">{raffle.name}</span>
+          </p>
+        </header>
+        
+        <section className="mb-6 space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <StatCard icon={Receipt} title="Ventas Totales" value={statistics.totalSales} colorClass="text-blue-600"/>
+            <StatCard icon={Ticket} title="Tickets Vendidos" value={statistics.totalTicketsSold} colorClass="text-green-600"/>
+            <StatCard icon={DollarSign} title="Ingresos" value={formatCurrency(statistics.totalRevenue, raffle.currency)} colorClass="text-indigo-600"/>
+            <StatCard icon={Clock} title="Pendiente" value={formatCurrency(statistics.pendingRevenue, raffle.currency)} colorClass="text-yellow-600"/>
+          </div>
+          <div className="bg-white p-3 rounded-lg shadow-sm">
+            <div className="flex justify-between items-center mb-1">
+              <span className="text-sm font-medium text-slate-700">Progreso de la Rifa</span>
+              <span className="text-xs font-medium text-slate-500">{statistics.totalTicketsSold} / {raffle.totalTickets} ({statistics.progress.toFixed(1)}%)</span>
+            </div>
+            <Progress value={statistics.progress} className="h-2 [&>div]:bg-orange-500"/>
+          </div>
+        </section>
 
-        {/* --- Sección de Estadísticas --- */}
-        <Card className="mb-8">
-            <CardHeader>
-                <CardTitle className="flex items-center gap-2"><BarChart2 className="h-5 w-5"/> Estadísticas de Ventas {date ? `(para ${format(date, "PPP", {locale: es})})` : '(Globales)'}</CardTitle>
-            </CardHeader>
-            <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-                    <div className="p-4 bg-gray-100 rounded-lg"><p className="text-sm text-muted-foreground">Ventas Totales</p><p className="text-2xl font-bold">{statistics.totalSales}</p></div>
-                    <div className="p-4 bg-gray-100 rounded-lg"><p className="text-sm text-muted-foreground">Tickets Vendidos</p><p className="text-2xl font-bold text-green-600">{statistics.totalTicketsSold}</p></div>
-                    <div className="p-4 bg-gray-100 rounded-lg"><p className="text-sm text-muted-foreground">Ingresos Confirmados</p><p className="text-2xl font-bold text-blue-600">{formatCurrency(statistics.totalRevenue, raffle.currency)}</p></div>
-                    <div className="p-4 bg-gray-100 rounded-lg"><p className="text-sm text-muted-foreground">Ingresos Pendientes</p><p className="text-2xl font-bold text-yellow-600">{formatCurrency(statistics.pendingRevenue, raffle.currency)}</p></div>
-                </div>
-                <div className="mt-4">
-                  <div className="flex justify-between mb-1">
-                      <span className="text-base font-medium text-blue-700">Progreso de Venta de Tickets</span>
-                      <span className="text-sm font-medium text-blue-700">{statistics.totalTicketsSold} / 10,000 ({statistics.progress.toFixed(2)}%)</span>
-                  </div>
-                  <Progress value={statistics.progress} />
-                </div>
-            </CardContent>
-        </Card>
-
-        {/* --- Sección de Filtros y Tabla --- */}
         <Card>
-            <CardHeader>
-                <CardTitle>Listado de Ventas</CardTitle>
-                <CardDescription>Explora, filtra y gestiona todas las transacciones.</CardDescription>
-            </CardHeader>
-            <CardContent>
-                {/* Barra de Filtros */}
-                <div className="flex flex-col md:flex-row items-center gap-2 mb-4">
-                    <div className="relative w-full md:flex-grow">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input placeholder="Buscar por nombre o email..." value={globalFilter} onChange={(e) => setGlobalFilter(e.target.value)} className="pl-10" />
-                    </div>
-                    <div className="flex gap-2 w-full md:w-auto flex-wrap">
-                        <Popover>
-                            <PopoverTrigger asChild><Button variant="outline" className="flex-grow justify-start text-left font-normal"><CalendarIcon className="mr-2 h-4 w-4" />{date ? format(date, "PPP", { locale: es }) : <span>Filtrar fecha</span>}</Button></PopoverTrigger>
-                            <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={date} onSelect={setDate} initialFocus /></PopoverContent>
-                        </Popover>
+          <CardHeader>
+            <CardTitle>Listado de Transacciones</CardTitle>
+            <CardDescription>Explora, filtra y gestiona todas las ventas.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap items-center gap-2 mb-4">
+              <div className="relative flex-grow min-w-[200px]">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input placeholder="Buscar por nombre o email..." value={globalFilter} onChange={(e) => setGlobalFilter(e.target.value)} className="pl-10" />
+              </div>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="w-full sm:w-auto justify-start text-left font-normal">
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {date ? format(date, "PPP", { locale: es }) : <span>Fecha</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={date} onSelect={setDate} initialFocus /></PopoverContent>
+              </Popover>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild><Button variant="outline" className="w-full sm:w-auto"><Filter className="mr-2 h-4 w-4" />Filtros</Button></DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuLabel>Estado</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {['confirmed', 'pending', 'rejected'].map(status => (
+                    <DropdownMenuCheckboxItem key={status} checked={table.getColumn('status')?.getFilterValue()?.includes(status)} onCheckedChange={(checked) => {
+                      const currentFilter = (table.getColumn('status')?.getFilterValue() as string[] ?? []);
+                      const newFilter = checked ? [...currentFilter, status] : currentFilter.filter(s => s !== status);
+                      table.getColumn('status')?.setFilterValue(newFilter.length > 0 ? newFilter : undefined);
+                    }}>
+                      {status.charAt(0).toUpperCase() + status.slice(1)}
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+              {isFiltered && (
+                <Button variant="ghost" onClick={resetFilters} size="icon" className="h-9 w-9">
+                  <X className="h-4 w-4" /><span className="sr-only">Limpiar filtros</span>
+                </Button>
+              )}
+              {isClient && (
+                <PDFDownloadLink
+                  document={<SalesPDF sales={filteredSales} stats={statistics} raffle={raffle} filterDate={date} />}
+                  fileName={`reporte-ventas-${raffle.name.replace(/\s+/g, '_')}-${format(new Date(), 'yyyy-MM-dd')}.pdf`}
+                >
+                  {({ loading }) => (
+                    <Button variant="secondary" className="w-full sm:w-auto" disabled={loading}>
+                      {loading ? <Loader2 className="mr-0 sm:mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-0 sm:mr-2 h-4 w-4" />}
+                      <span className="hidden sm:inline">Exportar</span>
+                    </Button>
+                  )}
+                </PDFDownloadLink>
+              )}
+            </div>
 
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild><Button variant="outline" className="flex-grow"><Filter className="mr-2 h-4 w-4" />Filtros</Button></DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuLabel>Estado</DropdownMenuLabel>
-                            <DropdownMenuSeparator />
-                            {['confirmed', 'pending', 'rejected'].map(status => (
-                              <DropdownMenuCheckboxItem key={status} checked={statusFilterValues.includes(status)} onCheckedChange={(checked) => {
-                                const newFilter = checked ? [...statusFilterValues, status] : statusFilterValues.filter(s => s !== status);
-                                table.getColumn('status')?.setFilterValue(newFilter);
-                              }}>
-                                {status === 'confirmed' ? 'Confirmado' : status === 'pending' ? 'Pendiente' : 'Rechazado'}
-                              </DropdownMenuCheckboxItem>
-                            ))}
-                            {uniquePaymentMethods.length > 0 && (
-                              <>
-                                <DropdownMenuLabel>Método de Pago</DropdownMenuLabel>
-                                <DropdownMenuSeparator />
-                                {uniquePaymentMethods.map(method => (
-                                  <DropdownMenuCheckboxItem key={method} checked={paymentMethodFilterValues.includes(method)} onCheckedChange={(checked) => {
-                                      const newFilter = checked ? [...paymentMethodFilterValues, method] : paymentMethodFilterValues.filter(m => m !== method);
-                                      table.getColumn('paymentMethod')?.setFilterValue(newFilter);
-                                  }}>
-                                    {method}
-                                  </DropdownMenuCheckboxItem>
-                                ))}
-                              </>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+            {/* --- Vista de Tabla para Desktop --- */}
+            <div className="hidden md:block">
+              <Table>
+                <TableHeader>
+                  {table.getHeaderGroups().map(headerGroup => (
+                    <TableRow key={headerGroup.id}>
+                      {headerGroup.headers.map(header => <TableHead key={header.id}>{flexRender(header.column.columnDef.header, header.getContext())}</TableHead>)}
+                       <TableHead /> {/* Columna extra para el botón de expandir */}
+                    </TableRow>
+                  ))}
+                </TableHeader>
+                <TableBody>
+                  {table.getRowModel().rows?.length ? table.getRowModel().rows.map(row => (
+                    <Collapsible asChild key={row.id} open={row.getIsExpanded()} onOpenChange={row.toggleExpanded}>
+                      <Fragment>
+                        <TableRow data-state={row.getIsSelected() && "selected"}>
+                          {row.getVisibleCells().map(cell => (
+                            <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
+                          ))}
+                          <TableCell>
+                            <CollapsibleTrigger asChild>
+                               <Button variant="ghost" size="icon">
+                                 {row.getIsExpanded() ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                               </Button>
+                            </CollapsibleTrigger>
+                          </TableCell>
+                        </TableRow>
+                        <CollapsibleContent asChild>
+                          <TableRow>
+                            <TableCell colSpan={columns.length + 1} className="p-0">
+                              <SaleDetailContent row={row} />
+                            </TableCell>
+                          </TableRow>
+                        </CollapsibleContent>
+                      </Fragment>
+                    </Collapsible>
+                  )) : (
+                    <TableRow><TableCell colSpan={columns.length + 1} className="h-24 text-center">No se encontraron ventas.</TableCell></TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
 
-                        {(date || globalFilter || columnFilters.length > 0) && (
-                            <Button variant="ghost" size="icon" onClick={resetFilters}><X className="h-4 w-4" /></Button>
-                        )}
+            {/* --- Vista de Tarjetas para Móvil --- */}
+            <div className="md:hidden space-y-3">
+              {table.getRowModel().rows?.length ? table.getRowModel().rows.map(row => {
+                const sale = row.original;
+                return (
+                  <Collapsible key={row.id} onOpenChange={() => row.toggleExpanded()}>
+                     <div className="rounded-lg border bg-card text-card-foreground shadow-sm">
+                        <CollapsibleTrigger className="w-full p-4 text-left">
+                           <div className="flex justify-between items-start">
+                              <div>
+                                 <p className="font-semibold">{sale.buyerName || 'N/A'}</p>
+                                 <p className="text-xs text-muted-foreground">{sale.buyerEmail}</p>
+                                 <p className="text-xs text-muted-foreground mt-1">{format(new Date(sale.createdAt), "dd MMM, hh:mm a", { locale: es })}</p>
+                              </div>
+                              <div className="flex flex-col items-end gap-2">
+                                 {getStatusBadge(sale.status)}
+                                 <span className="font-bold text-lg">{formatCurrency(sale.amount, raffle.currency)}</span>
+                              </div>
+                           </div>
+                           <div className="flex justify-between items-center mt-3 pt-3 border-t">
+                              <div className="text-sm">
+                                <span className="text-muted-foreground">Tickets:</span> <span className="font-bold">{sale.ticketCount}</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <PurchaseDetailsModal purchase={sale as any} />
+                                <div className="text-muted-foreground">
+                                  {row.getIsExpanded() ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                                </div>
+                              </div>
+                           </div>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent>
+                           <SaleDetailContent row={row} />
+                        </CollapsibleContent>
+                     </div>
+                  </Collapsible>
+                )
+              }) : (
+                <div className="text-center text-muted-foreground py-10">No se encontraron ventas.</div>
+              )}
+            </div>
 
-                        {/* --- INICIO DE CAMBIOS PARA PDF: Botón de descarga --- */}
-                        {isClient && (
-                          <PDFDownloadLink
-                            document={<SalesPDF sales={filteredSales} stats={statistics} raffle={raffle} filterDate={date} />}
-                            fileName={`reporte-ventas-${raffle.name.replace(/\s+/g, '_')}-${format(new Date(), 'yyyy-MM-dd')}.pdf`}
-                          >
-                            {({ loading }) => (
-                              <Button variant="secondary" className="flex-grow" disabled={loading}>
-                                {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-                                Exportar PDF
-                              </Button>
-                            )}
-                          </PDFDownloadLink>
-                        )}
-                        {/* --- FIN DE CAMBIOS PARA PDF --- */}
-                    </div>
-                </div>
-
-                {/* Tabla de Datos */}
-                <div className="rounded-md border">
-                    <Table>
-                        <TableHeader>
-                            {table.getHeaderGroups().map(headerGroup => (
-                                <TableRow key={headerGroup.id}>
-                                    {headerGroup.headers.map(header => <TableHead key={header.id}>{flexRender(header.column.columnDef.header, header.getContext())}</TableHead>)}
-                                </TableRow>
-                            ))}
-                        </TableHeader>
-                        <TableBody>
-                            {table.getRowModel().rows?.length ? (
-                                table.getRowModel().rows.map(row => (
-                                    <Collapsible key={row.id} asChild>
-                                        <Fragment>
-                                            <TableRow data-state={row.getIsSelected() && "selected"}>
-                                                {row.getVisibleCells().map(cell => (
-                                                    <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
-                                                ))}
-                                            </TableRow>
-                                            <CollapsibleContent asChild>
-                                                <TableRow>
-                                                    <TableCell colSpan={columns.length} className="p-0">
-                                                        <SaleDetailContent row={row} />
-                                                    </TableCell>
-                                                </TableRow>
-                                            </CollapsibleContent>
-                                        </Fragment>
-                                    </Collapsible>
-                                ))
-                            ) : (
-                                <TableRow><TableCell colSpan={columns.length} className="h-24 text-center">No se encontraron ventas con los filtros aplicados.</TableCell></TableRow>
-                            )}
-                        </TableBody>
-                    </Table>
-                </div>
-
-                {/* Paginación */}
-                <div className="flex items-center justify-end space-x-2 py-4">
-                  <div className="flex-1 text-sm text-muted-foreground">{table.getFilteredRowModel().rows.length} de {sales.length} venta(s).</div>
-                  <Button variant="outline" size="sm" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>Anterior</Button>
-                  <Button variant="outline" size="sm" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>Siguiente</Button>
-                </div>
-            </CardContent>
+            <div className="flex flex-col items-center justify-between gap-4 py-4 md:flex-row">
+              <div className="flex-1 text-sm text-muted-foreground">{table.getFilteredRowModel().rows.length} de {sales.length} venta(s) mostradas.</div>
+              <div className="flex items-center space-x-2">
+                <Button variant="outline" size="sm" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>Anterior</Button>
+                <Button variant="outline" size="sm" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>Siguiente</Button>
+              </div>
+            </div>
+          </CardContent>
         </Card>
-      </div>
+      </main>
     </div>
   );
 }

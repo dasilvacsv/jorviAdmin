@@ -3,114 +3,177 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation'; // Hook para saber la página actual
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { signOut } from 'next-auth/react';
 import {
-  LayoutDashboard,
-  Gift,
-  Users,
-  LogOut,
-  Menu,
-  Settings,
+    LayoutDashboard,
+    Gift,
+    Users,
+    LogOut,
+    Menu,
+    Settings,
+    ChevronsLeft, // Icono para colapsar
+    ChevronsRight, // Icono para expandir
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Session } from 'next-auth';
 
 interface SidebarProps {
-  session: Session;
+    session: Session;
 }
 
-export function Sidebar({ session }: SidebarProps) {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-
-  const navigation = [
+const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Rifas', href: '/rifas', icon: Gift },
     { name: 'Usuarios', href: '/usuarios', icon: Users },
-    { name: 'Configuración', href: '/settings', icon: Settings }, // Añadido
-  ];
+    { name: 'Configuración', href: '/settings', icon: Settings },
+];
 
-  return (
-    <>
-      {/* Sidebar fijo para pantallas grandes, adaptable para móviles */}
-      <div className={cn(
-        "fixed inset-y-0 left-0 z-40 w-64 bg-white shadow-lg transform transition-transform duration-200 ease-in-out",
-        sidebarOpen ? "translate-x-0" : "-translate-x-full",
-        "lg:translate-x-0 lg:static"
-      )}>
-        <div className="flex flex-col h-full">
-          {/* Header de la sidebar */}
-          <div className="flex items-center gap-2 p-6 border-b">
-            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-2 rounded-lg">
-              <Gift className="h-6 w-6 text-white" />
-            </div>
-            <span className="text-xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-              Admin Panel
-            </span>
-          </div>
+export function Sidebar({ session }: SidebarProps) {
+    const pathname = usePathname();
+    const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+    const [isCollapsed, setIsCollapsed] = useState(false); // Estado para el colapso en desktop
 
-          {/* Navegación */}
-          <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
-            {navigation.map((item) => {
-              const Icon = item.icon;
-              return (
-                <Link
-                  key={item.name}
-                  href={item.href}
-                  className="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-colors"
-                  onClick={() => setSidebarOpen(false)} // Cierra el menú en móvil al hacer clic
+    const primaryColor = "from-amber-500 to-orange-600";
+    const primaryTextColor = "text-orange-600";
+
+    return (
+        <TooltipProvider delayDuration={0}>
+            {/* Botón de menú para móvil */}
+            <div className="lg:hidden fixed top-4 left-4 z-50">
+                <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setMobileSidebarOpen(true)}
+                    className="bg-background/80 backdrop-blur-sm"
                 >
-                  <Icon className="h-5 w-5" />
-                  {item.name}
-                </Link>
-              );
-            })}
-          </nav>
-
-          {/* Sección de perfil y logout */}
-          <div className="p-4 border-t">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full flex items-center justify-center">
-                <span className="text-white font-medium text-sm">
-                  {session.user.name?.charAt(0) || session.user.email?.charAt(0)}
-                </span>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-gray-900">{session.user.name}</p>
-                <p className="text-xs text-gray-500">{session.user.email}</p>
-              </div>
+                    <Menu className="h-5 w-5" />
+                </Button>
             </div>
-            
-            <Button
-              variant="ghost"
-              className="w-full justify-start text-gray-700 hover:bg-red-50 hover:text-red-600"
-              onClick={() => signOut({ callbackUrl: '/auth/login' })}
-            >
-              <LogOut className="h-4 w-4 mr-2" />
-              Cerrar Sesión
-            </Button>
-          </div>
-        </div>
-      </div>
 
-      {/* Overlay para móvil */}
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-30 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
+            {/* Overlay para móvil */}
+            {mobileSidebarOpen && (
+                <div
+                    className="fixed inset-0 bg-black/60 z-30 lg:hidden"
+                    onClick={() => setMobileSidebarOpen(false)}
+                />
+            )}
 
-      {/* Botón de menú para móvil, fuera del sidebar */}
-      <div className="lg:hidden fixed top-4 left-4 z-50">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setSidebarOpen(!sidebarOpen)}
-        >
-          <Menu className="h-4 w-4" />
-        </Button>
-      </div>
-    </>
-  );
+            {/* Contenedor del Sidebar */}
+            <aside className={cn(
+                "fixed inset-y-0 left-0 z-40 flex flex-col bg-background border-r transition-all duration-300 ease-in-out",
+                // Estilos para móvil (Drawer)
+                "lg:static lg:inset-y-auto",
+                mobileSidebarOpen ? "translate-x-0" : "-translate-x-full",
+                "lg:translate-x-0",
+                // Estilos para desktop (Colapsable)
+                isCollapsed ? "lg:w-20" : "lg:w-64"
+            )}>
+                {/* --- Header del Sidebar --- */}
+                <div className={cn("flex items-center gap-2 p-4 border-b h-[65px]", isCollapsed ? "justify-center" : "px-6")}>
+                    <div className={cn("p-2 rounded-lg bg-gradient-to-r", primaryColor)}>
+                        <Gift className="h-6 w-6 text-white" />
+                    </div>
+                    <span className={cn("text-xl font-bold tracking-tighter bg-gradient-to-r bg-clip-text text-transparent", primaryColor, isCollapsed && "lg:hidden")}>
+                        Jorvi Admin
+                    </span>
+                </div>
+
+                {/* --- Navegación Principal --- */}
+                <nav className="flex-1 p-2 space-y-2 overflow-y-auto">
+                    {navigation.map((item) => {
+                        const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
+                        const linkContent = (
+                            <>
+                                <item.icon className={cn("h-5 w-5 shrink-0", isActive && primaryTextColor)} />
+                                <span className={cn("transition-opacity", isCollapsed && "lg:hidden")}>{item.name}</span>
+                            </>
+                        );
+
+                        return (
+                            <Tooltip key={item.name}>
+                                <TooltipTrigger asChild>
+                                    <Link
+                                        href={item.href}
+                                        className={cn(
+                                            "flex items-center gap-3 rounded-md p-3 text-sm font-medium transition-colors text-muted-foreground hover:bg-muted hover:text-foreground",
+                                            isCollapsed && "lg:justify-center",
+                                            isActive && `bg-orange-100/80 dark:bg-orange-900/20 ${primaryTextColor}`
+                                        )}
+                                        onClick={() => setMobileSidebarOpen(false)}
+                                    >
+                                        {linkContent}
+                                    </Link>
+                                </TooltipTrigger>
+                                {isCollapsed && (
+                                    <TooltipContent side="right" className="bg-foreground text-background">
+                                        <p>{item.name}</p>
+                                    </TooltipContent>
+                                )}
+                            </Tooltip>
+                        );
+                    })}
+                </nav>
+
+                {/* --- Sección de Perfil y Botón de Colapso --- */}
+                <div className="p-2 border-t mt-auto">
+                    {/* Botón para colapsar (solo en desktop) */}
+                    <div className="hidden lg:block">
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button
+                                    variant="ghost"
+                                    className="w-full justify-center"
+                                    size="icon"
+                                    onClick={() => setIsCollapsed(!isCollapsed)}
+                                >
+                                    {isCollapsed ? <ChevronsRight className="h-5 w-5" /> : <ChevronsLeft className="h-5 w-5" />}
+                                </Button>
+                            </TooltipTrigger>
+                             <TooltipContent side="right" className="bg-foreground text-background">
+                                <p>{isCollapsed ? "Expandir" : "Colapsar"}</p>
+                            </TooltipContent>
+                        </Tooltip>
+                    </div>
+
+                    {/* Perfil del usuario */}
+                    <div className={cn("flex items-center gap-3 p-3 mt-2", isCollapsed && "lg:justify-center")}>
+                        <div className={cn("w-9 h-9 bg-gradient-to-r rounded-full flex items-center justify-center shrink-0", primaryColor)}>
+                            <span className="text-white font-medium text-xs">
+                                {session.user.name?.charAt(0).toUpperCase() || session.user.email?.charAt(0).toUpperCase()}
+                            </span>
+                        </div>
+                        <div className={cn("overflow-hidden transition-opacity", isCollapsed && "lg:hidden")}>
+                            <p className="text-sm font-semibold truncate">{session.user.name}</p>
+                            <p className="text-xs text-muted-foreground truncate">{session.user.email}</p>
+                        </div>
+                    </div>
+                    
+                    {/* Botón de Logout */}
+                     <Tooltip>
+                        <TooltipTrigger asChild>
+                             <Button
+                                variant="ghost"
+                                className={cn(
+                                    "w-full justify-start text-muted-foreground hover:bg-red-500/10 hover:text-red-600",
+                                    isCollapsed && "lg:justify-center"
+                                )}
+                                onClick={() => signOut({ callbackUrl: '/auth/login' })}
+                            >
+                                <LogOut className="h-5 w-5 shrink-0" />
+                                <span className={cn("ml-3", isCollapsed && "lg:hidden")}>Cerrar Sesión</span>
+                            </Button>
+                        </TooltipTrigger>
+                        {isCollapsed && (
+                            <TooltipContent side="right" className="bg-foreground text-background">
+                                <p>Cerrar Sesión</p>
+                            </TooltipContent>
+                        )}
+                    </Tooltip>
+                </div>
+            </aside>
+        </TooltipProvider>
+    );
 }

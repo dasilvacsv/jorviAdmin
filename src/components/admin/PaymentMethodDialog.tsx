@@ -1,10 +1,20 @@
 "use client";
 
-import { useState, useEffect, useRef, ChangeEvent } from "react";
+import { useState, useEffect, useRef, ChangeEvent, DragEvent } from "react";
 import { useFormState, useFormStatus } from "react-dom";
-import { Loader2, AlertCircle, Info, Upload, X } from "lucide-react";
+import {
+  Loader2,
+  AlertCircle,
+  Upload,
+  X,
+  Banknote,
+  Smartphone,
+  Bitcoin,
+  Wallet,
+} from "lucide-react";
+import Image from "next/image";
 
-// Componentes de shadcn/ui
+// --- SHADCN/UI & CUSTOM COMPONENTS ---
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -19,15 +29,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Separator } from "@/components/ui/separator";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
 
-// Interfaz del Método de Pago
+// --- TYPES & CONSTANTS ---
 interface PaymentMethod {
   id?: string;
   title?: string;
@@ -45,7 +56,15 @@ interface PaymentMethod {
   binancePayId?: string | null;
 }
 
-// VALORES INICIALES PARA UN MÉTODO NUEVO
+interface PaymentMethodDialogProps {
+  action: (
+    prevState: any,
+    formData: FormData
+  ) => Promise<{ success: boolean; message: string }>;
+  method?: PaymentMethod;
+  triggerButton: React.ReactNode;
+}
+
 const initialState: Omit<PaymentMethod, "id"> = {
   title: "",
   iconUrl: null,
@@ -62,26 +81,179 @@ const initialState: Omit<PaymentMethod, "id"> = {
   binancePayId: "",
 };
 
-interface PaymentMethodDialogProps {
-  action: (
-    prevState: any,
-    formData: FormData
-  ) => Promise<{ success: boolean; message: string }>;
-  method?: PaymentMethod;
-  triggerButton: React.ReactNode;
-}
+type MethodType = "bank" | "mobile" | "crypto" | "ewallet";
+
+const methodTypes = [
+  { value: "bank", label: "Transferencia Bancaria", icon: Banknote },
+  { value: "mobile", label: "Pago Móvil", icon: Smartphone },
+  { value: "crypto", label: "Criptomoneda (Binance)", icon: Bitcoin },
+  { value: "ewallet", label: "E-Wallet (Zinli)", icon: Wallet },
+];
+
+// --- SUB-COMPONENTES PARA MAYOR CLARIDAD ---
 
 function SubmitButton({ isEditing }: { isEditing: boolean }) {
   const { pending } = useFormStatus();
+  const primaryButtonClasses =
+    "font-semibold text-white bg-gradient-to-r from-amber-500 to-orange-600 hover:shadow-lg hover:shadow-orange-500/40 transition-all";
   return (
-    <Button type="submit" disabled={pending}>
+    <Button type="submit" disabled={pending} className={primaryButtonClasses}>
       {pending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
       {isEditing ? "Guardar Cambios" : "Crear Método"}
     </Button>
   );
 }
 
-// --- COMPONENTE FINAL CON ESTADO CONTROLADO Y FORMULARIO ÚNICO ---
+// Componentes para cada grupo de campos
+const BankFields = ({ data, onChange }: any) => (
+  <div className="grid sm:grid-cols-2 gap-4">
+    <div className="space-y-2">
+      <Label htmlFor="accountHolderName">Nombre del Titular</Label>
+      <Input
+        id="accountHolderName"
+        name="accountHolderName"
+        value={data.accountHolderName ?? ""}
+        onChange={onChange}
+      />
+    </div>
+    <div className="space-y-2">
+      <Label htmlFor="rif">Cédula / RIF</Label>
+      <Input
+        id="rif"
+        name="rif"
+        placeholder="V-12345678"
+        value={data.rif ?? ""}
+        onChange={onChange}
+      />
+    </div>
+    <div className="space-y-2">
+      <Label htmlFor="bankName">Nombre del Banco</Label>
+      <Input
+        id="bankName"
+        name="bankName"
+        placeholder="Banesco"
+        value={data.bankName ?? ""}
+        onChange={onChange}
+      />
+    </div>
+    <div className="space-y-2">
+      <Label htmlFor="accountNumber">Número de Cuenta</Label>
+      <Input
+        id="accountNumber"
+        name="accountNumber"
+        placeholder="0134..."
+        value={data.accountNumber ?? ""}
+        onChange={onChange}
+      />
+    </div>
+  </div>
+);
+
+const MobilePaymentFields = ({ data, onChange }: any) => (
+  <div className="grid sm:grid-cols-2 gap-4">
+    <div className="space-y-2">
+      <Label htmlFor="accountHolderName">Nombre del Titular</Label>
+      <Input
+        id="accountHolderName"
+        name="accountHolderName"
+        value={data.accountHolderName ?? ""}
+        onChange={onChange}
+      />
+    </div>
+    <div className="space-y-2">
+      <Label htmlFor="rif">Cédula / RIF</Label>
+      <Input
+        id="rif"
+        name="rif"
+        placeholder="V-12345678"
+        value={data.rif ?? ""}
+        onChange={onChange}
+      />
+    </div>
+    <div className="space-y-2">
+      <Label htmlFor="bankName">Nombre del Banco</Label>
+      <Input
+        id="bankName"
+        name="bankName"
+        placeholder="Banesco"
+        value={data.bankName ?? ""}
+        onChange={onChange}
+      />
+    </div>
+    <div className="space-y-2">
+      <Label htmlFor="phoneNumber">Teléfono</Label>
+      <Input
+        id="phoneNumber"
+        name="phoneNumber"
+        placeholder="0412-1234567"
+        value={data.phoneNumber ?? ""}
+        onChange={onChange}
+      />
+    </div>
+  </div>
+);
+
+const CryptoFields = ({ data, onChange }: any) => (
+  <div className="space-y-4">
+    <div className="space-y-2">
+      <Label htmlFor="binancePayId">Binance Pay ID</Label>
+      <Input
+        id="binancePayId"
+        name="binancePayId"
+        placeholder="Ej: 123456789"
+        value={data.binancePayId ?? ""}
+        onChange={onChange}
+      />
+    </div>
+    <div className="space-y-2">
+      <Label htmlFor="walletAddress">Dirección de Wallet (Opcional)</Label>
+      <Input
+        id="walletAddress"
+        name="walletAddress"
+        placeholder="Txxxxxxxx..."
+        value={data.walletAddress ?? ""}
+        onChange={onChange}
+      />
+    </div>
+    <div className="space-y-2">
+      <Label htmlFor="network">Red (Opcional)</Label>
+      <Input
+        id="network"
+        name="network"
+        placeholder="Ej: TRC20, BEP20"
+        value={data.network ?? ""}
+        onChange={onChange}
+      />
+    </div>
+  </div>
+);
+
+const EWalletFields = ({ data, onChange }: any) => (
+  <div className="grid sm:grid-cols-2 gap-4">
+    <div className="space-y-2">
+      <Label htmlFor="email">Correo Electrónico</Label>
+      <Input
+        id="email"
+        name="email"
+        placeholder="tu_correo@example.com"
+        value={data.email ?? ""}
+        onChange={onChange}
+      />
+    </div>
+    <div className="space-y-2">
+      <Label htmlFor="phoneNumber">Teléfono (Opcional)</Label>
+      <Input
+        id="phoneNumber"
+        name="phoneNumber"
+        placeholder="0412-1234567"
+        value={data.phoneNumber ?? ""}
+        onChange={onChange}
+      />
+    </div>
+  </div>
+);
+
+// --- COMPONENTE PRINCIPAL ---
 export function PaymentMethodDialog({
   action,
   method,
@@ -97,67 +269,78 @@ export function PaymentMethodDialog({
 
   const [formData, setFormData] =
     useState<Omit<PaymentMethod, "id">>(initialState);
-
+  const [methodType, setMethodType] = useState<MethodType>("bank");
   const [iconFile, setIconFile] = useState<File | null>(null);
   const [iconPreview, setIconPreview] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
+  // Efecto para inicializar el formulario en modo edición o resetearlo
   useEffect(() => {
-    if (isEditing && method) {
-      setFormData({
-        title: method.title ?? "",
-        iconUrl: method.iconUrl ?? null,
-        isActive: method.isActive ?? true,
-        triggersApiVerification: method.triggersApiVerification ?? false,
-        accountHolderName: method.accountHolderName ?? "",
-        rif: method.rif ?? "",
-        phoneNumber: method.phoneNumber ?? "",
-        bankName: method.bankName ?? "",
-        accountNumber: method.accountNumber ?? "",
-        email: method.email ?? "",
-        walletAddress: method.walletAddress ?? "",
-        network: method.network ?? "",
-        binancePayId: method.binancePayId ?? "",
-      });
-      setIconPreview(method.iconUrl ?? null);
-    } else {
-      setFormData(initialState);
-      setIconPreview(null);
-      setIconFile(null);
+    if (open) {
+      if (isEditing && method) {
+        // Lógica para determinar el tipo de método al editar
+        let type: MethodType = "bank";
+        if (method.binancePayId || method.walletAddress) type = "crypto";
+        else if (method.email && !method.bankName) type = "ewallet";
+        else if (method.phoneNumber && !method.accountNumber) type = "mobile";
+
+        setMethodType(type);
+        setFormData({
+          title: method.title ?? "",
+          iconUrl: method.iconUrl ?? null,
+          isActive: method.isActive ?? true,
+          triggersApiVerification: method.triggersApiVerification ?? false,
+          accountHolderName: method.accountHolderName ?? "",
+          rif: method.rif ?? "",
+          phoneNumber: method.phoneNumber ?? "",
+          bankName: method.bankName ?? "",
+          accountNumber: method.accountNumber ?? "",
+          email: method.email ?? "",
+          walletAddress: method.walletAddress ?? "",
+          network: method.network ?? "",
+          binancePayId: method.binancePayId ?? "",
+        });
+        setIconPreview(method.iconUrl ?? null);
+      } else {
+        setMethodType("bank");
+        setFormData(initialState);
+        setIconPreview(null);
+        setIconFile(null);
+      }
     }
   }, [method, isEditing, open]);
 
+  // Cerrar el diálogo en caso de éxito
   useEffect(() => {
-    if (state.success) {
-      setOpen(false);
-    }
+    if (state.success) setOpen(false);
   }, [state]);
 
-  const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleIconChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0] || null;
-    setIconFile(file);
-    if (file) {
-      setIconPreview(URL.createObjectURL(file));
-    } else {
-      setIconPreview(method?.iconUrl ?? null);
-    }
-  };
-
-  const clearIcon = () => {
-    setIconFile(null);
-    setIconPreview(method?.iconUrl ?? null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
-  };
-
-  const handleSwitchChange = (name: keyof PaymentMethod, checked: boolean) => {
+  const handleChange = (e: ChangeEvent<HTMLInputElement>) =>
+    setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+  const handleSwitchChange = (name: keyof PaymentMethod, checked: boolean) =>
     setFormData((prev) => ({ ...prev, [name]: checked }));
+
+  const handleFileChange = (file: File | null) => {
+    setIconFile(file);
+    if (file) setIconPreview(URL.createObjectURL(file));
+    else setIconPreview(method?.iconUrl ?? null);
+  };
+
+  const handleDrop = (e: DragEvent<HTMLLabelElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    handleFileChange(e.dataTransfer.files?.[0] || null);
+  };
+  const handleDragLeave = (e: DragEvent<HTMLLabelElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+  const handleDragOver = (e: DragEvent<HTMLLabelElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
   };
 
   return (
@@ -182,18 +365,21 @@ export function PaymentMethodDialog({
             </Alert>
           )}
           {method?.id && <input type="hidden" name="id" value={method.id} />}
-          <input
-            type="hidden"
-            name="isActive"
-            value={String(formData.isActive)}
-          />
-          <input
-            type="hidden"
-            name="triggersApiVerification"
-            value={String(formData.triggersApiVerification)}
-          />
+          {Object.entries(formData).map(
+            ([key, value]) =>
+              typeof value === "boolean" && (
+                <input
+                  key={key}
+                  type="hidden"
+                  name={key}
+                  value={String(value)}
+                />
+              )
+          )}
+          {/* La carga real del archivo se debe manejar en la server action */}
+          <input type="file" name="icon" className="hidden" />
 
-          {/* SECCIÓN GENERAL */}
+          {/* --- SECCIÓN GENERAL --- */}
           <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="title">
@@ -204,170 +390,111 @@ export function PaymentMethodDialog({
                 name="title"
                 placeholder="Ej: Pago Móvil Banesco"
                 required
-                value={formData.title}
+                value={formData.title ?? ""}
                 onChange={handleChange}
               />
             </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="icon">Ícono del Método</Label>
-              <div className="flex items-center gap-4">
-                <div className="relative w-20 h-20 rounded-md border flex items-center justify-center bg-muted/40">
+            <div>
+              <Label htmlFor="icon-upload">Ícono del Método</Label>
+              <label
+                htmlFor="icon-upload"
+                className={`relative mt-2 flex justify-center w-full h-32 px-6 pt-5 pb-6 border-2 border-dashed rounded-md cursor-pointer transition-colors ${
+                  isDragging ? "border-primary bg-primary/10" : "border-border"
+                }`}
+                onDrop={handleDrop}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+              >
+                <div className="space-y-1 text-center">
                   {iconPreview ? (
-                    <img
-                      src={iconPreview}
-                      alt="Vista previa"
-                      className="rounded-md object-contain h-full w-full"
-                    />
+                    <>
+                      <Image
+                        src={iconPreview}
+                        alt="Vista previa"
+                        layout="fill"
+                        className="rounded-md object-contain p-2"
+                      />
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="icon"
+                        className="absolute top-1 right-1 h-6 w-6"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          handleFileChange(null);
+                        }}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </>
                   ) : (
-                    <Upload className="h-6 w-6 text-muted-foreground" />
+                    <>
+                      <Upload className="mx-auto h-10 w-10 text-muted-foreground" />
+                      <p className="text-sm text-muted-foreground">
+                        Arrastra una imagen o haz clic para subirla
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        PNG, JPG, SVG hasta 1MB
+                      </p>
+                    </>
                   )}
                 </div>
-                <div className="flex-1">
-                  <Input
-                    id="icon"
-                    name="icon"
-                    type="file"
-                    ref={fileInputRef}
-                    accept="image/png, image/jpeg, image/svg+xml, image/webp"
-                    onChange={handleIconChange}
-                    className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
-                  />
-                  {iconFile && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={clearIcon}
-                      className="mt-2 text-red-500"
-                    >
-                      <X className="mr-2 h-4 w-4" /> Quitar imagen
-                    </Button>
-                  )}
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Sube una imagen (PNG, JPG, SVG). Recomendado: 128x128px.
-                  </p>
-                </div>
-              </div>
+                <Input
+                  id="icon-upload"
+                  name="icon"
+                  type="file"
+                  className="sr-only"
+                  onChange={(e) =>
+                    handleFileChange(e.target.files?.[0] || null)
+                  }
+                  accept="image/*"
+                />
+              </label>
             </div>
           </div>
 
           <Separator />
 
-          {/* SECCIÓN DETALLES DE LA CUENTA */}
+          {/* --- SECCIÓN DE DETALLES (AHORA DINÁMICA) --- */}
           <div className="space-y-4">
-            <h3 className="text-sm font-medium text-foreground">
-              Detalles de la Cuenta (Opcional)
-            </h3>
-            {formData.title?.toLowerCase().includes("zinli") ? (
-              <div className="space-y-2">
-                <Label htmlFor="email">Correo Electrónico (Zinli)</Label>
-                <Input
-                  id="email"
-                  name="email"
-                  placeholder="tu_correo@example.com"
-                  value={formData.email ?? ""}
-                  onChange={handleChange}
-                />
-                <Label htmlFor="phoneNumber">Teléfono (Zinli)</Label>
-                <Input
-                  id="phoneNumber"
-                  name="phoneNumber"
-                  placeholder="0412-1234567"
-                  value={formData.phoneNumber ?? ""}
-                  onChange={handleChange}
-                />
-              </div>
-            ) : formData.title?.toLowerCase().includes("binance") ? (
-              <div className="space-y-2">
-                <Label htmlFor="walletAddress">Dirección de Wallet (Binance)</Label>
-                <Input
-                  id="walletAddress"
-                  name="walletAddress"
-                  placeholder="Txxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-                  value={formData.walletAddress ?? ""}
-                  onChange={handleChange}
-                />
-                <Label htmlFor="network">Red (Binance)</Label>
-                <Input
-                  id="network"
-                  name="network"
-                  placeholder="Ej: TRC20, BEP20, ERC20"
-                  value={formData.network ?? ""}
-                  onChange={handleChange}
-                />
-                <Label htmlFor="binancePayId">Binance Pay ID</Label>
-                <Input
-                  id="binancePayId"
-                  name="binancePayId"
-                  placeholder="Ej: 123456789"
-                  value={formData.binancePayId ?? ""}
-                  onChange={handleChange}
-                />
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="accountHolderName">Nombre del Titular</Label>
-                  <Input
-                    id="accountHolderName"
-                    name="accountHolderName"
-                    value={formData.accountHolderName ?? ""}
-                    onChange={handleChange}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="rif">Cédula / RIF</Label>
-                  <Input
-                    id="rif"
-                    name="rif"
-                    placeholder="V-12345678"
-                    value={formData.rif ?? ""}
-                    onChange={handleChange}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="bankName">Nombre del Banco</Label>
-                  <Input
-                    id="bankName"
-                    name="bankName"
-                    placeholder="Banesco"
-                    value={formData.bankName ?? ""}
-                    onChange={handleChange}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="phoneNumber">Teléfono (Pago Móvil)</Label>
-                  <Input
-                    id="phoneNumber"
-                    name="phoneNumber"
-                    placeholder="0412-1234567"
-                    value={formData.phoneNumber ?? ""}
-                    onChange={handleChange}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="accountNumber">
-                    Número de Cuenta (Transferencia)
-                  </Label>
-                  <Input
-                    id="accountNumber"
-                    name="accountNumber"
-                    placeholder="0134..."
-                    value={formData.accountNumber ?? ""}
-                    onChange={handleChange}
-                  />
-                </div>
-              </div>
+            <div className="space-y-2">
+              <Label>Tipo de Método</Label>
+              <Select
+                value={methodType}
+                onValueChange={(value) => setMethodType(value as MethodType)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecciona un tipo..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {methodTypes.map((type) => (
+                    <SelectItem key={type.value} value={type.value}>
+                      <div className="flex items-center gap-2">
+                        <type.icon className="h-4 w-4" /> {type.label}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {methodType === "bank" && (
+              <BankFields data={formData} onChange={handleChange} />
+            )}
+            {methodType === "mobile" && (
+              <MobilePaymentFields data={formData} onChange={handleChange} />
+            )}
+            {methodType === "crypto" && (
+              <CryptoFields data={formData} onChange={handleChange} />
+            )}
+            {methodType === "ewallet" && (
+              <EWalletFields data={formData} onChange={handleChange} />
             )}
           </div>
 
           <Separator />
 
-          {/* SECCIÓN DE CONFIGURACIÓN */}
-          <div className="space-y-4">
-            <h3 className="text-sm font-medium text-foreground">
-              Configuración
-            </h3>
+          {/* --- SECCIÓN DE CONFIGURACIÓN --- */}
+          <div className="space-y-3">
             <div className="flex items-center justify-between rounded-lg border p-3">
               <div className="space-y-0.5">
                 <Label htmlFor="isActive-switch">Activo para clientes</Label>
@@ -378,38 +505,23 @@ export function PaymentMethodDialog({
               <Switch
                 id="isActive-switch"
                 checked={formData.isActive}
-                onCheckedChange={(checked) =>
-                  handleSwitchChange("isActive", checked)
-                }
+                onCheckedChange={(c) => handleSwitchChange("isActive", c)}
               />
             </div>
             <div className="flex items-center justify-between rounded-lg border p-3">
               <div className="space-y-0.5">
-                <Label
-                  htmlFor="triggersApiVerification-switch"
-                  className="flex items-center"
-                >
+                <Label htmlFor="triggersApiVerification-switch">
                   Verificación Automática
-                  <TooltipProvider delayDuration={100}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Info className="ml-2 h-4 w-4 text-muted-foreground cursor-pointer" />
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Activa la API para verificar pagos automáticamente.</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
                 </Label>
                 <p className="text-xs text-muted-foreground">
-                  Intenta confirmar los pagos reportados con este método.
+                  Intenta confirmar pagos con este método vía API.
                 </p>
               </div>
               <Switch
                 id="triggersApiVerification-switch"
                 checked={formData.triggersApiVerification}
-                onCheckedChange={(checked) =>
-                  handleSwitchChange("triggersApiVerification", checked)
+                onCheckedChange={(c) =>
+                  handleSwitchChange("triggersApiVerification", c)
                 }
               />
             </div>
