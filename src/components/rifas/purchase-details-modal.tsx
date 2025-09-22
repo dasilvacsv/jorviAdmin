@@ -24,7 +24,6 @@ import {
     DialogTrigger,
     DialogClose,
 } from "@/components/ui/dialog";
-// --- Se importa Card para el nuevo layout ---
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useFormStatus } from "react-dom";
 import {
@@ -76,7 +75,6 @@ function SubmitButton({ children, newStatus, disabled }: { children: React.React
     );
 }
 
-// --- NUEVO: Componente de detalle ultra-compacto ---
 function CompactInfoDetail({ icon, label, value }: { icon: React.ElementType, label: string, value: React.ReactNode }) {
     const Icon = icon;
     return (
@@ -131,81 +129,90 @@ export function PurchaseDetailsModal({ purchase, raffleCurrency }: PurchaseDetai
             <DialogTrigger asChild>
                 <Button variant="outline" size="sm"><Eye className="h-4 w-4 mr-2" />Ver Detalles</Button>
             </DialogTrigger>
-            {/* MEJORA: Modal más ancho para el layout de 3 columnas */}
-            <DialogContent className="max-w-6xl w-full p-0">
+            {/* ✅ CAMBIOS CLAVE PARA RESPONSIVE Y SCROLL:
+              1. max-w-* mejorado: Se ajusta mejor en tablets (sm, md) y pantallas grandes (lg).
+              2. max-h-[90vh]: Limita la altura máxima del modal al 90% de la altura de la pantalla.
+              3. flex flex-col: Convierte el contenido del modal en un contenedor flex vertical.
+            */}
+            <DialogContent className="max-w-md sm:max-w-2xl lg:max-w-6xl w-full p-0 max-h-[90vh] flex flex-col">
                 <DialogHeader className="p-6 pb-4 border-b">
                     <DialogTitle className="text-2xl flex items-center gap-3">
                         <Receipt className="h-6 w-6 text-orange-500" />
                         Detalles de la Compra
                     </DialogTitle>
                 </DialogHeader>
-                
-                {/* MEJORA: Layout de 3 columnas sin scroll */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 p-6 bg-slate-50">
-                    {/* --- Panel 1: Info del Comprador --- */}
-                    <Card className="shadow-none border border-slate-200">
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2 text-lg">
-                                <User className="h-5 w-5 text-orange-500" />
-                                Información del Comprador
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-1">
-                            <CompactInfoDetail icon={User} label="Nombre" value={purchase.buyerName} />
-                            <CompactInfoDetail icon={Mail} label="Email" value={purchase.buyerEmail} />
-                            <CompactInfoDetail icon={Phone} label="Teléfono" value={purchase.buyerPhone} />
-                        </CardContent>
-                    </Card>
 
-                    {/* --- Panel 2: Detalles de la Transacción --- */}
-                    <Card className="shadow-none border border-slate-200">
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2 text-lg">
-                                <Receipt className="h-5 w-5 text-orange-500" />
-                                Detalles de la Transacción
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-1">
-                            <CompactInfoDetail icon={Ticket} label="Tickets" value={purchase.ticketCount} />
-                            <CompactInfoDetail icon={DollarSign} label="Monto" value={formatCurrency(purchase.amount, raffleCurrency)} />
-                            <CompactInfoDetail icon={CreditCard} label="Método" value={purchase.paymentMethod} />
-                            <CompactInfoDetail icon={Hash} label="Referencia" value={purchase.paymentReference} />
-                        </CardContent>
-                    </Card>
+                {/* ✅ Contenedor de scroll:
+                  1. flex-1: Hace que este div ocupe todo el espacio vertical disponible entre el header y el footer.
+                  2. overflow-y-auto: Muestra una barra de scroll vertical SÓLO si el contenido se desborda.
+                */}
+                <div className="flex-1 overflow-y-auto p-6 bg-slate-50">
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                        {/* --- Panel 1: Info del Comprador --- */}
+                        <Card className="shadow-none border border-slate-200">
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2 text-lg">
+                                    <User className="h-5 w-5 text-orange-500" />
+                                    Información del Comprador
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-1">
+                                <CompactInfoDetail icon={User} label="Nombre" value={purchase.buyerName} />
+                                <CompactInfoDetail icon={Mail} label="Email" value={purchase.buyerEmail} />
+                                <CompactInfoDetail icon={Phone} label="Teléfono" value={purchase.buyerPhone} />
+                            </CardContent>
+                        </Card>
 
-                    {/* --- Panel 3: Comprobante de Pago (Primero en móvil) --- */}
-                    <Card className="shadow-none border border-slate-200 order-first lg:order-last">
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2 text-lg">
-                                <ImageIcon className="h-5 w-5 text-orange-500" />
-                                Comprobante de Pago
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div className="relative aspect-square w-full rounded-md overflow-hidden border-2 border-dashed bg-slate-100 flex items-center justify-center">
-                                {purchase.paymentScreenshotUrl ? (
-                                    <Image src={purchase.paymentScreenshotUrl} alt="Captura de pago" fill className="object-contain" />
-                                ) : (
-                                    <div className="text-center text-gray-500 p-4">
-                                        <ImageIcon className="h-10 w-10 mx-auto mb-2" />
-                                        <p className="text-sm">No se adjuntó imagen.</p>
-                                    </div>
+                        {/* --- Panel 2: Detalles de la Transacción --- */}
+                        <Card className="shadow-none border border-slate-200">
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2 text-lg">
+                                    <Receipt className="h-5 w-5 text-orange-500" />
+                                    Detalles de la Transacción
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-1">
+                                <CompactInfoDetail icon={Ticket} label="Tickets" value={purchase.ticketCount} />
+                                <CompactInfoDetail icon={DollarSign} label="Monto" value={formatCurrency(purchase.amount, raffleCurrency)} />
+                                <CompactInfoDetail icon={CreditCard} label="Método" value={purchase.paymentMethod} />
+                                <CompactInfoDetail icon={Hash} label="Referencia" value={purchase.paymentReference} />
+                            </CardContent>
+                        </Card>
+
+                        {/* --- Panel 3: Comprobante de Pago (Primero en móvil) --- */}
+                        <Card className="shadow-none border border-slate-200 order-first lg:order-last">
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2 text-lg">
+                                    <ImageIcon className="h-5 w-5 text-orange-500" />
+                                    Comprobante de Pago
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <div className="relative aspect-square w-full rounded-md overflow-hidden border-2 border-dashed bg-slate-100 flex items-center justify-center">
+                                    {purchase.paymentScreenshotUrl ? (
+                                        <Image src={purchase.paymentScreenshotUrl} alt="Captura de pago" fill className="object-contain" />
+                                    ) : (
+                                        <div className="text-center text-gray-500 p-4">
+                                            <ImageIcon className="h-10 w-10 mx-auto mb-2" />
+                                            <p className="text-sm">No se adjuntó imagen.</p>
+                                        </div>
+                                    )}
+                                </div>
+                                {purchase.paymentScreenshotUrl && (
+                                    <a href={purchase.paymentScreenshotUrl} target="_blank" rel="noopener noreferrer">
+                                        <Button variant="outline" className="w-full">
+                                            <ExternalLink className="h-4 w-4 mr-2" />
+                                            Ver en tamaño completo
+                                        </Button>
+                                    </a>
                                 )}
-                            </div>
-                            {purchase.paymentScreenshotUrl && (
-                                <a href={purchase.paymentScreenshotUrl} target="_blank" rel="noopener noreferrer">
-                                    <Button variant="outline" className="w-full">
-                                        <ExternalLink className="h-4 w-4 mr-2" />
-                                        Ver en tamaño completo
-                                    </Button>
-                                </a>
-                            )}
-                        </CardContent>
-                    </Card>
+                            </CardContent>
+                        </Card>
+                    </div>
                 </div>
 
                 {/* --- Footer con Acciones --- */}
-                <DialogFooter className="p-4 border-t flex-col-reverse sm:flex-row sm:justify-end gap-2">
+                <DialogFooter className="p-4 border-t flex-col-reverse sm:flex-row sm:justify-end gap-2 bg-white">
                     {purchase.status === 'pending' ? (
                         <>
                             <Dialog open={rejectionDialogOpen} onOpenChange={setRejectionDialogOpen}>
