@@ -74,7 +74,9 @@ function SaleDetailContent({ row }: { row: Row<PurchaseWithTicketsAndRaffle> }) 
     <div className="p-4 bg-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-4">
       <div>
         <h4 className="font-semibold text-xs mb-2 text-gray-700 uppercase tracking-wider">Tickets ({sale.tickets.length})</h4>
-        {sortedTickets.length > 0 ? (
+        {sale.status === 'pending' ? (
+          <p className="text-sm text-muted-foreground italic">Los tickets se asignarán al confirmar la venta.</p>
+        ) : sortedTickets.length > 0 ? (
           <div className="max-h-28 overflow-y-auto pr-2 flex flex-wrap gap-1">
             {sortedTickets.map(({ ticketNumber }) => (
               <Badge key={ticketNumber} variant="secondary" className="font-mono text-xs">{ticketNumber}</Badge>
@@ -87,9 +89,9 @@ function SaleDetailContent({ row }: { row: Row<PurchaseWithTicketsAndRaffle> }) 
         <div className="text-sm space-y-1">
           <p><span className="text-muted-foreground">Método:</span> {sale.paymentMethod || 'N/A'}</p>
           <p><span className="text-muted-foreground">Ref:</span> {sale.paymentReference || 'N/A'}</p>
-           {sale.paymentScreenshotUrl ? (
+          {sale.paymentScreenshotUrl ? (
             <a href={sale.paymentScreenshotUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline mt-2 inline-block">Ver Comprobante</a>
-           ) : <p className="text-sm text-muted-foreground italic mt-2">Sin comprobante.</p>}
+          ) : <p className="text-sm text-muted-foreground italic mt-2">Sin comprobante.</p>}
         </div>
       </div>
     </div>
