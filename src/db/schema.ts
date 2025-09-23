@@ -17,12 +17,12 @@ import { relations } from 'drizzle-orm';
 // ENUMs (Tipos de datos personalizados para estados)
 // ----------------------------------------------------------------
 
-// Añadido 'postponed' para la opción de aplazamiento
 export const raffleStatusEnum = pgEnum("raffle_status", ["active", "finished", "cancelled", "draft", "postponed"]);
 export const purchaseStatusEnum = pgEnum("purchase_status", ["pending", "confirmed", "rejected"]);
 export const ticketStatusEnum = pgEnum("ticket_status", ["available", "reserved", "sold"]);
 export const currencyEnum = pgEnum("currency", ["USD", "VES"]);
 export const rejectionReasonEnum = pgEnum("rejection_reason", ["invalid_payment", "malicious"]);
+
 // ----------------------------------------------------------------
 // TABLAS PRINCIPALES
 // ----------------------------------------------------------------
@@ -39,6 +39,8 @@ export const users = pgTable("users", {
 export const raffles = pgTable("raffles", {
   id: text("id").primaryKey().$defaultFn(() => createId()),
   name: varchar("name", { length: 256 }).notNull(),
+  // 👇 Campo 'slug' para URLs amigables y únicas
+  slug: varchar("slug", { length: 256 }).notNull().unique(),
   description: text("description"),
   price: decimal("price", { precision: 10, scale: 2 }).notNull(),
   minimumTickets: integer("minimum_tickets").notNull().default(10000),
@@ -46,10 +48,8 @@ export const raffles = pgTable("raffles", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
   winnerTicketId: text("winner_ticket_id").references(() => tickets.id),
-currency: currencyEnum("currency").default("USD").notNull(),
-  // NUEVO: Fecha límite de la rifa
+  currency: currencyEnum("currency").default("USD").notNull(),
   limitDate: timestamp("limit_date").notNull(),
-  // NUEVO: Datos del sorteo manual
   winnerLotteryNumber: varchar("winner_lottery_number", { length: 10 }),
   winnerProofUrl: text("winner_proof_url"),
 });
@@ -67,10 +67,8 @@ export const purchases = pgTable("purchases", {
   ticketCount: integer("ticket_count").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   raffleId: text("raffle_id").notNull().references(() => raffles.id, { onDelete: "cascade" }),
-  // --- INICIO DE CAMBIOS: Nuevos campos para el rechazo ---
-  rejectionReason: rejectionReasonEnum("rejection_reason"), // Campo para el motivo (opcional)
-  rejectionComment: text("rejection_comment"), // Campo para el comentario (opcional)
-  // --- FIN DE CAMBIOS ---
+  rejectionReason: rejectionReasonEnum("rejection_reason"),
+  rejectionComment: text("rejection_comment"),
 });
 
 export const tickets = pgTable("tickets", {
@@ -87,21 +85,21 @@ export const tickets = pgTable("tickets", {
 });
 
 export const systemSettings = pgTable("system_settings", {
-    id: text("id").primaryKey().$defaultFn(() => createId()),
-    key: varchar("key", { length: 256 }).notNull().unique(), // ej: 'commission_rate', 'default_exchange_rate'
-    value: text("value").notNull(),
-    description: text("description"),
-    isActive: boolean("is_active").default(true).notNull(),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+    id: text("id").primaryKey().$defaultFn(() => createId()),
+    key: varchar("key", { length: 256 }).notNull().unique(),
+    value: text("value").notNull(),
+    description: text("description"),
+    isActive: boolean("is_active").default(true).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
 export const raffleExchangeRates = pgTable("raffle_exchange_rates", {
-  id: text("id").primaryKey().$defaultFn(() => createId()),
-  raffleId: text("raffle_id").notNull().references(() => raffles.id, { onDelete: "cascade" }).unique(),
-  usdToVesRate: decimal("usd_to_ves_rate", { precision: 10, scale: 2 }).notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  id: text("id").primaryKey().$defaultFn(() => createId()),
+  raffleId: text("raffle_id").notNull().references(() => raffles.id, { onDelete: "cascade" }).unique(),
+  usdToVesRate: decimal("usd_to_ves_rate", { precision: 10, scale: 2 }).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
 // ----------------------------------------------------------------
@@ -115,21 +113,20 @@ export const raffleImages = pgTable("raffle_images", {
 });
 
 export const paymentMethods = pgTable("payment_methods", {
-  id: text("id").primaryKey().$defaultFn(() => createId()),
-  title: varchar("title", { length: 256 }).notNull().unique(),
-  iconUrl: text("icon_url"),
-  accountHolderName: varchar("account_holder_name", { length: 256 }),
-  rif: varchar("rif", { length: 20 }),
-  phoneNumber: varchar("phone_number", { length: 20 }),
-  bankName: varchar("bank_name", { length: 100 }),
-  accountNumber: varchar("account_number", { length: 20 }),
-  walletAddress: text("wallet_address"),
-  network: varchar("network", { length: 50 }),
-  email: varchar("email", { length: 256 }),
-  // +++ NEW: Binance Pay ID field +++
-  binancePayId: varchar("binance_pay_id", { length: 50 }), 
-  isActive: boolean("is_active").default(true).notNull(),
-  triggersApiVerification: boolean("triggers_api_verification").default(false).notNull(),
+  id: text("id").primaryKey().$defaultFn(() => createId()),
+  title: varchar("title", { length: 256 }).notNull().unique(),
+  iconUrl: text("icon_url"),
+  accountHolderName: varchar("account_holder_name", { length: 256 }),
+  rif: varchar("rif", { length: 20 }),
+  phoneNumber: varchar("phone_number", { length: 20 }),
+  bankName: varchar("bank_name", { length: 100 }),
+  accountNumber: varchar("account_number", { length: 20 }),
+  walletAddress: text("wallet_address"),
+  network: varchar("network", { length: 50 }),
+  email: varchar("email", { length: 256 }),
+  binancePayId: varchar("binance_pay_id", { length: 50 }),
+  isActive: boolean("is_active").default(true).notNull(),
+  triggersApiVerification: boolean("triggers_api_verification").default(false).notNull(),
 });
 
 // ----------------------------------------------------------------
@@ -137,37 +134,36 @@ export const paymentMethods = pgTable("payment_methods", {
 // ----------------------------------------------------------------
 
 export const waitlistSubscribers = pgTable("waitlist_subscribers", {
-  id: text("id").primaryKey().$defaultFn(() => createId()),
-  name: varchar("name", { length: 256 }).notNull(),
-  email: varchar("email", { length: 256 }).notNull().unique(),
-  whatsapp: varchar("whatsapp", { length: 50 }).notNull().unique(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
+  id: text("id").primaryKey().$defaultFn(() => createId()),
+  name: varchar("name", { length: 256 }).notNull(),
+  email: varchar("email", { length: 256 }).notNull().unique(),
+  whatsapp: varchar("whatsapp", { length: 50 }).notNull().unique(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 // ----------------------------------------------------------------
 // RELACIONES
 // ----------------------------------------------------------------
 
-// Relación para la tabla de tasas de cambio
 export const raffleExchangeRateRelations = relations(raffleExchangeRates, ({ one }) => ({
-    raffle: one(raffles, {
-        fields: [raffleExchangeRates.raffleId],
-        references: [raffles.id],
-    }),
+    raffle: one(raffles, {
+        fields: [raffleExchangeRates.raffleId],
+        references: [raffles.id],
+    }),
 }));
 
 export const raffleRelations = relations(raffles, ({ many, one }) => ({
-  purchases: many(purchases),
-  tickets: many(tickets),
-  images: many(raffleImages),
-  winnerTicket: one(tickets, {
-    fields: [raffles.winnerTicketId],
-    references: [tickets.id],
-  }),
-  exchangeRate: one(raffleExchangeRates, {
-    fields: [raffles.id],
-    references: [raffleExchangeRates.raffleId],
-  }),
+  purchases: many(purchases),
+  tickets: many(tickets),
+  images: many(raffleImages),
+  winnerTicket: one(tickets, {
+    fields: [raffles.winnerTicketId],
+    references: [tickets.id],
+  }),
+  exchangeRate: one(raffleExchangeRates, {
+    fields: [raffles.id],
+    references: [raffleExchangeRates.raffleId],
+  }),
 }));
 
 export const purchaseRelations = relations(purchases, ({ one, many }) => ({

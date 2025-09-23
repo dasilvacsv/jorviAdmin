@@ -1,16 +1,17 @@
+// app/rifas/[id]/page.tsx
 import { db } from '@/lib/db';
-import { raffles } from '@/lib/db/schema';
+import { raffles, systemSettings } from '@/lib/db/schema'; // ✅ Importa systemSettings
 import { eq } from 'drizzle-orm';
 import { notFound } from 'next/navigation';
-import { RaffleDetailView } from '@/components/rifas/raffle-detail-view'; // Asegúrate que esta ruta sea correcta
-import { getTopBuyers } from '@/lib/actions'; // 1. IMPORTA la nueva server action
+import { RaffleDetailView } from '@/components/rifas/raffle-detail-view';
+import { getTopBuyers } from '@/lib/actions';
 
 export const revalidate = 0;
 
 export default async function RaffleDetailPage({ params }: { params: { id: string } }) {
   const raffleId = params.id;
 
-  // 2. OBTÉN LOS DATOS DE LA RIFA (CON TICKETS COMPLETOS)
+  // 1. Obtén la rifa y sus relaciones
   const raffle = await db.query.raffles.findFirst({
     where: eq(raffles.id, raffleId),
     with: {
@@ -18,10 +19,6 @@ export default async function RaffleDetailPage({ params }: { params: { id: strin
       purchases: {
         orderBy: (purchases, { desc }) => [desc(purchases.createdAt)],
       },
-      // --- CAMBIO CLAVE ---
-      // Necesitamos los datos completos de los tickets (número, estado, purchaseId)
-      // para que la nueva tabla de datos pueda funcionar.
-      // Por eso cambiamos la consulta a `true`.
       tickets: true,
       winnerTicket: {
         with: {
@@ -35,16 +32,21 @@ export default async function RaffleDetailPage({ params }: { params: { id: strin
     notFound();
   }
 
-  // 3. OBTÉN EL TOP DE COMPRADORES
-  // Llamamos a la nueva acción que creamos para obtener el ranking.
+  // ✅ 2. OBTÉN LA TASA DE CAMBIO DEL SISTEMA
+  const usdToVesRateRecord = await db.query.systemSettings.findFirst({
+    where: eq(systemSettings.key, 'usd_to_ves_rate'),
+  });
+  const usdToVesRate = usdToVesRateRecord ? parseFloat(usdToVesRateRecord.value) : null;
+  
+  // 3. Obtén el top de compradores
   const topBuyersData = await getTopBuyers(raffleId);
 
-  // 4. PASA AMBOS DATOS AL COMPONENTE CLIENTE
-  // Ahora el componente recibe tanto la rifa como el top de compradores como props.
+  // ✅ 4. PASA LOS DATOS AL COMPONENTE CLIENTE
   return (
     <RaffleDetailView
-      initialRaffle={raffle as any} // 'as any' para simplificar, puedes crear un tipo más estricto
+      initialRaffle={raffle as any}
       topBuyers={topBuyersData}
+      usdToVesRate={usdToVesRate} // ✅ Pasar la nueva prop
     />
   );
 }
