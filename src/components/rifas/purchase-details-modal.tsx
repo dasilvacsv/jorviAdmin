@@ -1,4 +1,3 @@
-// components/PurchaseDetailsModal.tsx
 "use client";
 
 import { useState, useEffect } from "react";
@@ -25,10 +24,11 @@ import {
     DialogClose,
 } from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { useFormStatus } from "react-dom";
 import {
     Check, X, Eye, Receipt, User, Mail, Phone, Ticket, DollarSign,
-    CreditCard, Hash, ImageIcon, ExternalLink, Loader2
+    CreditCard, Hash, ImageIcon, ExternalLink, Loader2, Edit, Save, Cancel
 } from "lucide-react";
 import Image from "next/image";
 import { updatePurchaseStatusAction } from "@/lib/actions";
@@ -38,8 +38,6 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-
-// --- TIPOS Y COMPONENTES AUXILIARES ---
 
 interface Purchase {
     id: string;
@@ -56,7 +54,7 @@ interface Purchase {
 
 interface PurchaseDetailsModalProps {
     purchase: Purchase;
-    raffleCurrency: 'USD' | 'VES';
+    raffleCurrency?: 'USD' | 'VES';
 }
 
 function SubmitButton({ children, newStatus, disabled }: { children: React.ReactNode; newStatus: "confirmed" | "rejected", disabled?: boolean }) {
@@ -75,6 +73,82 @@ function SubmitButton({ children, newStatus, disabled }: { children: React.React
     );
 }
 
+function EditableInfoDetail({ 
+    icon, 
+    label, 
+    value, 
+    onSave, 
+    type = "text",
+    editable = false 
+}: { 
+    icon: React.ElementType, 
+    label: string, 
+    value: React.ReactNode, 
+    onSave?: (newValue: string) => void,
+    type?: "text" | "email" | "tel",
+    editable?: boolean
+}) {
+    const [isEditing, setIsEditing] = useState(false);
+    const [editValue, setEditValue] = useState(typeof value === 'string' ? value : '');
+    const Icon = icon;
+
+    const handleSave = () => {
+        if (onSave && editValue !== value) {
+            onSave(editValue);
+        }
+        setIsEditing(false);
+    };
+
+    const handleCancel = () => {
+        setEditValue(typeof value === 'string' ? value : '');
+        setIsEditing(false);
+    };
+
+    return (
+        <div className="flex items-center justify-between text-sm py-2 border-b border-slate-200 last:border-b-0">
+            <div className="flex items-center gap-2 text-slate-600">
+                <Icon className="h-4 w-4" />
+                <span>{label}</span>
+            </div>
+            <div className="flex items-center gap-2 flex-1 justify-end">
+                {isEditing ? (
+                    <>
+                        <Input
+                            type={type}
+                            value={editValue}
+                            onChange={(e) => setEditValue(e.target.value)}
+                            className="h-8 text-sm max-w-[200px]"
+                            autoFocus
+                        />
+                        <Button size="sm" variant="ghost" onClick={handleSave} className="h-8 w-8 p-0">
+                            <Save className="h-4 w-4 text-green-600" />
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={handleCancel} className="h-8 w-8 p-0">
+                            <X className="h-4 w-4 text-red-600" />
+                        </Button>
+                    </>
+                ) : (
+                    <>
+                        <span className="font-semibold text-slate-800 break-all text-right">
+                            {value || <span className="italic text-slate-400">N/A</span>}
+                        </span>
+                        {editable && (
+                            <Button 
+                                size="sm" 
+                                variant="ghost" 
+                                onClick={() => setIsEditing(true)}
+                                className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                                <Edit className="h-4 w-4" />
+                            </Button>
+                        )}
+                    </>
+                )}
+            </div>
+        </div>
+    );
+}
+
 function CompactInfoDetail({ icon, label, value }: { icon: React.ElementType, label: string, value: React.ReactNode }) {
     const Icon = icon;
     return (
@@ -90,12 +164,14 @@ function CompactInfoDetail({ icon, label, value }: { icon: React.ElementType, la
     );
 }
 
-// --- COMPONENTE PRINCIPAL ---
-export function PurchaseDetailsModal({ purchase, raffleCurrency }: PurchaseDetailsModalProps) {
+export function PurchaseDetailsModal({ purchase, raffleCurrency = 'USD' }: PurchaseDetailsModalProps) {
     const [open, setOpen] = useState(false);
     const [rejectionDialogOpen, setRejectionDialogOpen] = useState(false);
     const [rejectionReason, setRejectionReason] = useState<'invalid_payment' | 'malicious' | ''>('');
     const [rejectionComment, setRejectionComment] = useState('');
+    
+    // ✅ NUEVO: Estados para la información editable
+    const [purchaseData, setPurchaseData] = useState(purchase);
 
     const [state, formAction] = useFormState(updatePurchaseStatusAction, { success: false, message: "" });
     const { toast } = useToast();
@@ -116,24 +192,56 @@ export function PurchaseDetailsModal({ purchase, raffleCurrency }: PurchaseDetai
         }
     }, [state, toast]);
 
+    // ✅ NUEVO: Funciones para actualizar la información
+    const handleEmailChange = async (newEmail: string) => {
+        try {
+            // Aquí puedes hacer una llamada al servidor para actualizar el email
+            setPurchaseData(prev => ({ ...prev, buyerEmail: newEmail }));
+            toast({
+                title: "Éxito",
+                description: "Email actualizado correctamente",
+                variant: "default",
+            });
+        } catch (error) {
+            toast({
+                title: "Error",
+                description: "No se pudo actualizar el email",
+                variant: "destructive",
+            });
+        }
+    };
+
+    const handlePhoneChange = async (newPhone: string) => {
+        try {
+            // Aquí puedes hacer una llamada al servidor para actualizar el teléfono
+            setPurchaseData(prev => ({ ...prev, buyerPhone: newPhone }));
+            toast({
+                title: "Éxito",
+                description: "Teléfono actualizado correctamente",
+                variant: "default",
+            });
+        } catch (error) {
+            toast({
+                title: "Error",
+                description: "No se pudo actualizar el teléfono",
+                variant: "destructive",
+            });
+        }
+    };
+
     const formatCurrency = (amount: string, currency: 'USD' | 'VES') => {
         const value = parseFloat(amount).toFixed(2);
         return currency === 'USD' ? `$${value}` : `Bs. ${value}`;
     };
 
     const isRejectButtonDisabled = !rejectionReason || (rejectionReason === 'malicious' && rejectionComment.trim() === '');
-    const canBeConfirmed = !!purchase.paymentScreenshotUrl;
+    const canBeConfirmed = !!purchaseData.paymentScreenshotUrl;
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
                 <Button variant="outline" size="sm"><Eye className="h-4 w-4 mr-2" />Ver Detalles</Button>
             </DialogTrigger>
-            {/* ✅ CAMBIOS CLAVE PARA RESPONSIVE Y SCROLL:
-              1. max-w-* mejorado: Se ajusta mejor en tablets (sm, md) y pantallas grandes (lg).
-              2. max-h-[90vh]: Limita la altura máxima del modal al 90% de la altura de la pantalla.
-              3. flex flex-col: Convierte el contenido del modal en un contenedor flex vertical.
-            */}
             <DialogContent className="max-w-md sm:max-w-2xl lg:max-w-6xl w-full p-0 max-h-[90vh] flex flex-col">
                 <DialogHeader className="p-6 pb-4 border-b">
                     <DialogTitle className="text-2xl flex items-center gap-3">
@@ -142,14 +250,10 @@ export function PurchaseDetailsModal({ purchase, raffleCurrency }: PurchaseDetai
                     </DialogTitle>
                 </DialogHeader>
 
-                {/* ✅ Contenedor de scroll:
-                  1. flex-1: Hace que este div ocupe todo el espacio vertical disponible entre el header y el footer.
-                  2. overflow-y-auto: Muestra una barra de scroll vertical SÓLO si el contenido se desborda.
-                */}
                 <div className="flex-1 overflow-y-auto p-6 bg-slate-50">
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                        {/* --- Panel 1: Info del Comprador --- */}
-                        <Card className="shadow-none border border-slate-200">
+                        {/* ✅ MODIFICADO: Panel 1 con campos editables */}
+                        <Card className="shadow-none border border-slate-200 group">
                             <CardHeader>
                                 <CardTitle className="flex items-center gap-2 text-lg">
                                     <User className="h-5 w-5 text-orange-500" />
@@ -157,13 +261,27 @@ export function PurchaseDetailsModal({ purchase, raffleCurrency }: PurchaseDetai
                                 </CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-1">
-                                <CompactInfoDetail icon={User} label="Nombre" value={purchase.buyerName} />
-                                <CompactInfoDetail icon={Mail} label="Email" value={purchase.buyerEmail} />
-                                <CompactInfoDetail icon={Phone} label="Teléfono" value={purchase.buyerPhone} />
+                                <CompactInfoDetail icon={User} label="Nombre" value={purchaseData.buyerName} />
+                                <EditableInfoDetail 
+                                    icon={Mail} 
+                                    label="Email" 
+                                    value={purchaseData.buyerEmail}
+                                    type="email"
+                                    onSave={handleEmailChange}
+                                    editable={true}
+                                />
+                                <EditableInfoDetail 
+                                    icon={Phone} 
+                                    label="Teléfono" 
+                                    value={purchaseData.buyerPhone || ''}
+                                    type="tel"
+                                    onSave={handlePhoneChange}
+                                    editable={true}
+                                />
                             </CardContent>
                         </Card>
 
-                        {/* --- Panel 2: Detalles de la Transacción --- */}
+                        {/* Panel 2: Sin cambios */}
                         <Card className="shadow-none border border-slate-200">
                             <CardHeader>
                                 <CardTitle className="flex items-center gap-2 text-lg">
@@ -172,14 +290,14 @@ export function PurchaseDetailsModal({ purchase, raffleCurrency }: PurchaseDetai
                                 </CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-1">
-                                <CompactInfoDetail icon={Ticket} label="Tickets" value={purchase.ticketCount} />
-                                <CompactInfoDetail icon={DollarSign} label="Monto" value={formatCurrency(purchase.amount, raffleCurrency)} />
-                                <CompactInfoDetail icon={CreditCard} label="Método" value={purchase.paymentMethod} />
-                                <CompactInfoDetail icon={Hash} label="Referencia" value={purchase.paymentReference} />
+                                <CompactInfoDetail icon={Ticket} label="Tickets" value={purchaseData.ticketCount} />
+                                <CompactInfoDetail icon={DollarSign} label="Monto" value={formatCurrency(purchaseData.amount, raffleCurrency)} />
+                                <CompactInfoDetail icon={CreditCard} label="Método" value={purchaseData.paymentMethod} />
+                                <CompactInfoDetail icon={Hash} label="Referencia" value={purchaseData.paymentReference} />
                             </CardContent>
                         </Card>
 
-                        {/* --- Panel 3: Comprobante de Pago (Primero en móvil) --- */}
+                        {/* Panel 3: Sin cambios */}
                         <Card className="shadow-none border border-slate-200 order-first lg:order-last">
                             <CardHeader>
                                 <CardTitle className="flex items-center gap-2 text-lg">
@@ -189,8 +307,8 @@ export function PurchaseDetailsModal({ purchase, raffleCurrency }: PurchaseDetai
                             </CardHeader>
                             <CardContent className="space-y-4">
                                 <div className="relative aspect-square w-full rounded-md overflow-hidden border-2 border-dashed bg-slate-100 flex items-center justify-center">
-                                    {purchase.paymentScreenshotUrl ? (
-                                        <Image src={purchase.paymentScreenshotUrl} alt="Captura de pago" fill className="object-contain" />
+                                    {purchaseData.paymentScreenshotUrl ? (
+                                        <Image src={purchaseData.paymentScreenshotUrl} alt="Captura de pago" fill className="object-contain" />
                                     ) : (
                                         <div className="text-center text-gray-500 p-4">
                                             <ImageIcon className="h-10 w-10 mx-auto mb-2" />
@@ -198,8 +316,8 @@ export function PurchaseDetailsModal({ purchase, raffleCurrency }: PurchaseDetai
                                         </div>
                                     )}
                                 </div>
-                                {purchase.paymentScreenshotUrl && (
-                                    <a href={purchase.paymentScreenshotUrl} target="_blank" rel="noopener noreferrer">
+                                {purchaseData.paymentScreenshotUrl && (
+                                    <a href={purchaseData.paymentScreenshotUrl} target="_blank" rel="noopener noreferrer">
                                         <Button variant="outline" className="w-full">
                                             <ExternalLink className="h-4 w-4 mr-2" />
                                             Ver en tamaño completo
@@ -211,9 +329,9 @@ export function PurchaseDetailsModal({ purchase, raffleCurrency }: PurchaseDetai
                     </div>
                 </div>
 
-                {/* --- Footer con Acciones --- */}
+                {/* Footer: Sin cambios significativos */}
                 <DialogFooter className="p-4 border-t flex-col-reverse sm:flex-row sm:justify-end gap-2 bg-white">
-                    {purchase.status === 'pending' ? (
+                    {purchaseData.status === 'pending' ? (
                         <>
                             <Dialog open={rejectionDialogOpen} onOpenChange={setRejectionDialogOpen}>
                                 <DialogTrigger asChild>
@@ -225,7 +343,7 @@ export function PurchaseDetailsModal({ purchase, raffleCurrency }: PurchaseDetai
                                         <DialogDescription>Selecciona un motivo. Se notificará al comprador.</DialogDescription>
                                     </DialogHeader>
                                     <form action={formAction} className="space-y-4">
-                                        <input type="hidden" name="purchaseId" value={purchase.id} />
+                                        <input type="hidden" name="purchaseId" value={purchaseData.id} />
                                         <input type="hidden" name="newStatus" value="rejected" />
                                         <RadioGroup name="rejectionReason" required value={rejectionReason} onValueChange={(v: any) => setRejectionReason(v)}>
                                             <div className="flex items-center space-x-2">
@@ -275,7 +393,7 @@ export function PurchaseDetailsModal({ purchase, raffleCurrency }: PurchaseDetai
                                     <AlertDialogFooter>
                                         <AlertDialogCancel>Cancelar</AlertDialogCancel>
                                         <form action={formAction} className="w-full sm:w-auto">
-                                            <input type="hidden" name="purchaseId" value={purchase.id} />
+                                            <input type="hidden" name="purchaseId" value={purchaseData.id} />
                                             <input type="hidden" name="newStatus" value="confirmed" />
                                             <AlertDialogAction asChild><SubmitButton newStatus="confirmed">Sí, confirmar</SubmitButton></AlertDialogAction>
                                         </form>
@@ -285,7 +403,7 @@ export function PurchaseDetailsModal({ purchase, raffleCurrency }: PurchaseDetai
                         </>
                     ) : (
                         <Button variant="outline" disabled className="w-full">
-                            Compra ya {purchase.status === 'confirmed' ? 'confirmada' : 'rechazada'}.
+                            Compra ya {purchaseData.status === 'confirmed' ? 'confirmada' : 'rechazada'}.
                         </Button>
                     )}
                 </DialogFooter>

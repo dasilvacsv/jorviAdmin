@@ -131,14 +131,16 @@ export function RaffleSalesView({ initialSalesData }: { initialSalesData: Raffle
   }, [sales, date, globalFilter, columnFilters]);
 
   const statistics = useMemo(() => {
-    const confirmedSales = filteredSales.filter(s => s.status === 'confirmed');
-    const pendingSales = filteredSales.filter(s => s.status === 'pending');
-    const totalRevenue = confirmedSales.reduce((acc, sale) => acc + parseFloat(sale.amount), 0);
-    const totalTicketsSold = confirmedSales.reduce((acc, sale) => acc + sale.ticketCount, 0);
-    const pendingRevenue = pendingSales.reduce((acc, sale) => acc + parseFloat(sale.amount), 0);
-    const progress = raffle.totalTickets > 0 ? (totalTicketsSold / raffle.totalTickets) * 100 : 0;
-    return { totalSales: filteredSales.length, totalRevenue, totalTicketsSold, pendingRevenue, progress };
-  }, [filteredSales, raffle.totalTickets]);
+  const confirmedSales = filteredSales.filter(s => s.status === 'confirmed');
+  const pendingSales = filteredSales.filter(s => s.status === 'pending');
+  const totalRevenue = confirmedSales.reduce((acc, sale) => acc + parseFloat(sale.amount), 0);
+  const totalTicketsSold = confirmedSales.reduce((acc, sale) => acc + sale.ticketCount, 0);
+  const pendingRevenue = pendingSales.reduce((acc, sale) => acc + parseFloat(sale.amount), 0);
+  // ✅ CAMBIO: Usar 10000 como total de tickets (ya que se generan del 0000 al 9999)
+  const totalTickets = 10000;
+  const progress = totalTickets > 0 ? (totalTicketsSold / totalTickets) * 100 : 0;
+  return { totalSales: filteredSales.length, totalRevenue, totalTicketsSold, pendingRevenue, progress, totalTickets };
+}, [filteredSales]); // ✅ CAMBIO: Remover raffle.totalTickets de las dependencias
 
   const columns: ColumnDef<PurchaseWithTicketsAndRaffle>[] = useMemo(() => [
     {
@@ -211,7 +213,8 @@ export function RaffleSalesView({ initialSalesData }: { initialSalesData: Raffle
           <div className="bg-white p-3 rounded-lg shadow-sm">
             <div className="flex justify-between items-center mb-1">
               <span className="text-sm font-medium text-slate-700">Progreso de la Rifa</span>
-              <span className="text-xs font-medium text-slate-500">{statistics.totalTicketsSold} / {raffle.totalTickets} ({statistics.progress.toFixed(1)}%)</span>
+              <span className="text-xs font-medium text-slate-500">{statistics.totalTicketsSold} / {statistics.totalTickets} ({statistics.progress.toFixed(1)}%)</span>
+
             </div>
             <Progress value={statistics.progress} className="h-2 [&>div]:bg-orange-500"/>
           </div>
