@@ -24,6 +24,7 @@ import crypto from "crypto";
 import { Resend } from "resend";
 import { sendWhatsappMessage } from "@/features/whatsapp/actions";
 import { auth } from "./auth";
+import { RaffleSalesData } from "./types";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -1382,6 +1383,36 @@ async function notifyWaitlistAboutNewRaffle(raffleId: string, raffleName: string
   }
 }
 
+export async function getSalesDataForRaffle(raffleId: string): Promise<RaffleSalesData | null> {
+    try {
+        // 1. Obtener los detalles básicos de la rifa
+        const raffleDetails = await db.query.raffles.findFirst({
+            where: eq(raffles.id, raffleId),
+            columns: { id: true, name: true, currency: true, price: true, minimumTickets: true }
+        });
+
+        if (!raffleDetails) return null;
+
+        // 2. Obtener todas las compras de la rifa con sus tickets
+        const allSales = await db.query.purchases.findMany({
+            where: eq(purchases.raffleId, raffleId),
+            orderBy: desc(purchases.createdAt),
+            with: {
+                tickets: { columns: { ticketNumber: true } },
+            },
+        });
+        
+        return {
+            raffle: { ...raffleDetails, totalTickets: raffleDetails.minimumTickets },
+            sales: allSales,
+        };
+
+    } catch (error) {
+        console.error("Error al obtener las ventas de la rifa:", error);
+        return null;
+    }
+}
+
 export async function getSalesForRaffle(raffleId: string) {
   try {
     // 1. Requerir permisos de administrador
@@ -1441,6 +1472,84 @@ export async function getSalesForRaffle(raffleId: string) {
     return null;
   }
 }
+
+// --- NUEVA ACCIÓN: OBTENER VENTAS Y ANALÍTICAS PARA EL MÓDULO DE VENTAS ---
+export async function getSalesAndAnalyticsForRaffle(raffleId: string): Promise<RaffleSalesAnalyticsData | null> {
+  try {
+    // 1. Obtener los detalles básicos de la rifa
+    const raffleDetails = await db.query.raffles.findFirst({
+      where: eq(raffles.id, raffleId),
+      columns: { id: true, name: true, currency: true, price: true, minimumTickets: true }
+    });
+
+    if (!raffleDetails) return null;
+
+    // 2. Obtener todas las compras de la rifa con sus tickets y vendedor (referral)
+    const allSales = await db.query.purchases.findMany({
+      where: eq(purchases.raffleId, raffleId),
+      orderBy: desc(purchases.createdAt),
+      with: {
+        tickets: { columns: { ticketNumber: true } },
+        referral: { columns: { name: true, code: true } }, // ¡Aquí está la magia!
+      },
+    });
+
+    // 3. Procesar los datos para las analíticas de vendedores
+    const analyticsMap = new Map<string, SellerAnalytics>();
+
+    // Inicializar la entrada para ventas sin referido
+    analyticsMap.set('N/A', {
+      sellerName: 'Ventas Directas (N/A)',
+      sellerCode: null,
+      totalSales: 0,
+      confirmedSales: 0,
+      totalTickets: 0,
+      confirmedTickets: 0,
+      totalRevenue: 0,
+      confirmedRevenue: 0,
+    });
+
+    for (const sale of allSales) {
+      const sellerCode = sale.referral?.code ?? 'N/A';
+      const sellerName = sale.referral?.name ?? 'Ventas Directas (N/A)';
+
+      if (!analyticsMap.has(sellerCode)) {
+        analyticsMap.set(sellerCode, {
+          sellerName: sellerName,
+          sellerCode: sellerCode,
+          totalSales: 0, confirmedSales: 0, totalTickets: 0,
+          confirmedTickets: 0, totalRevenue: 0, confirmedRevenue: 0,
+        });
+      }
+
+      const stats = analyticsMap.get(sellerCode)!;
+      const saleAmount = parseFloat(sale.amount);
+
+      stats.totalSales += 1;
+      stats.totalTickets += sale.ticketCount;
+      stats.totalRevenue += saleAmount;
+
+      if (sale.status === 'confirmed') {
+        stats.confirmedSales += 1;
+        stats.confirmedTickets += sale.ticketCount;
+        stats.confirmedRevenue += saleAmount;
+      }
+    }
+
+    const sellerAnalytics = Array.from(analyticsMap.values()).sort((a, b) => b.confirmedRevenue - a.confirmedRevenue);
+
+    return {
+      raffle: { ...raffleDetails, totalTickets: raffleDetails.minimumTickets },
+      sales: allSales,
+      sellerAnalytics,
+    };
+
+  } catch (error) {
+    console.error("Error al obtener las ventas y analíticas de la rifa:", error);
+    return null;
+  }
+}
+
 
 const UpdatePurchaseInfoSchema = z.object({
   purchaseId: z.string(),

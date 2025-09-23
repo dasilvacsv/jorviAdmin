@@ -1,26 +1,24 @@
 // app/rifas/[id]/ventas/page.tsx
 
-import { db } from '@/lib/db';
-import { purchases, raffles } from '@/lib/db/schema';
-import { eq, desc } from 'drizzle-orm';
+import { getSalesDataForRaffle } from '@/lib/actions';
+import { RaffleSalesView } from '@/components/rifas/sales/raffle-sales-view';
 import { notFound } from 'next/navigation';
-import { getSalesForRaffle } from '@/lib/actions'; // Crearemos esta acción
-import { RaffleSalesView } from '@/components/rifas/sales/raffle-sales-view'; // Crearemos este componente
+import { RaffleSalesData } from '@/lib/types';
 
-export const revalidate = 0; // Para que los datos de ventas siempre estén frescos
+export const revalidate = 0; // Datos siempre frescos
 
 export default async function RaffleSalesPage({ params }: { params: { id: string } }) {
-  const raffleId = params.id;
+    const raffleId = params.id;
 
-  // Usamos una nueva server action para obtener todas las ventas y datos de la rifa
-  const salesData = await getSalesForRaffle(raffleId);
+    // Usamos la server action simplificada
+    const initialSalesData: RaffleSalesData | null = await getSalesDataForRaffle(raffleId);
 
-  if (!salesData) {
-    notFound();
-  }
-  
-  // Pasamos los datos iniciales al componente cliente que manejará toda la interactividad
-  return (
-    <RaffleSalesView initialSalesData={salesData} />
-  );
+    if (!initialSalesData) {
+        notFound();
+    }
+
+    // Pasamos los datos iniciales al componente cliente
+    return (
+        <RaffleSalesView initialSalesData={initialSalesData} />
+    );
 }
