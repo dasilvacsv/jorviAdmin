@@ -9,7 +9,7 @@ import { motion } from 'framer-motion';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import CountUp from 'react-countup';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react'; // Import useState
 import { Button } from '@/components/ui/button';
 
 // --- TIPOS DE DATOS ---
@@ -23,16 +23,11 @@ type PurchaseWithTickets = {
     tickets: { ticketNumber: string }[];
 };
 
-// TIPO ACTUALIZADO: Añadimos 'amount' y 'currency'
 type TopPurchase = {
     id: string;
     buyerName: string | null;
     ticketCount: number;
-    amount: string; // <-- AÑADIDO
-    raffle: {
-        name: string;
-        currency: "USD" | "VES"; // <-- AÑADIDO
-    };
+    raffle: { name: string };
     tickets: { ticketNumber: string }[];
 }
 
@@ -45,21 +40,27 @@ type DashboardClientProps = {
     revenueUsd: number;
     revenueVes: number;
     pendingPurchasesList: PurchaseWithTickets[];
-    topPurchasesList: TopPurchase[]; // <-- Usará el tipo actualizado
+    topPurchasesList: TopPurchase[];
 };
 
-// --- COMPONENTE AUXILIAR para agrupar tickets (sin cambios) ---
+// --- COMPONENTE AUXILIAR para agrupar tickets ---
 function groupTickets(tickets: { ticketNumber: string }[]): string[] {
     if (!tickets || tickets.length === 0) {
         return [];
     }
-    const ticketNumbers = tickets.map(t => parseInt(t.ticketNumber, 10)).sort((a, b) => a - b);
+
+    const ticketNumbers = tickets
+        .map(t => parseInt(t.ticketNumber, 10))
+        .sort((a, b) => a - b);
+
     const ranges: string[] = [];
     let start = ticketNumbers[0];
     let end = ticketNumbers[0];
+
     for (let i = 1; i < ticketNumbers.length; i++) {
         const current = ticketNumbers[i];
         const prev = ticketNumbers[i - 1];
+
         if (current === prev + 1) {
             end = current;
         } else {
@@ -72,15 +73,17 @@ function groupTickets(tickets: { ticketNumber: string }[]): string[] {
             end = current;
         }
     }
+
     if (start === end) {
         ranges.push(String(start).padStart(4, '0'));
     } else {
         ranges.push(`${String(start).padStart(4, '0')}-${String(end).padStart(4, '0')}`);
     }
+
     return ranges;
 }
 
-// Tarjeta de estadística reutilizable y compacta (sin cambios)
+// Tarjeta de estadística reutilizable y compacta
 const StatCard = ({ title, value, icon: Icon, isCurrency = false, currencySymbol = '' }: { title: string, value: number, icon: React.ElementType, isCurrency?: boolean, currencySymbol?: string }) => (
     <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -96,18 +99,23 @@ const StatCard = ({ title, value, icon: Icon, isCurrency = false, currencySymbol
     </Card>
 );
 
-// Gráfico de estado de compras (sin cambios)
+// Gráfico de estado de compras
 const PurchaseStatusChart = ({ confirmed, pending }: { confirmed: number, pending: number }) => {
-    const data = [{ name: 'Confirmadas', value: confirmed }, { name: 'Pendientes', value: pending }];
-    const COLORS = ['#10B981', '#F59E0B'];
+    const data = [
+        { name: 'Confirmadas', value: confirmed },
+        { name: 'Pendientes', value: pending },
+    ];
+    const COLORS = ['#10B981', '#F59E0B']; // Verde y Ámbar
+
     if (confirmed === 0 && pending === 0) {
         return (
             <div className="flex flex-col items-center justify-center h-40 text-center text-muted-foreground">
                 <BarChart2 className="mx-auto h-8 w-8 mb-2" />
                 <p>Sin datos de compras.</p>
             </div>
-        );
+        )
     }
+
     return (
         <ResponsiveContainer width="100%" height={160}>
             <PieChart>
@@ -120,22 +128,32 @@ const PurchaseStatusChart = ({ confirmed, pending }: { confirmed: number, pendin
     );
 };
 
-// --- CONTENIDO EXPANDIBLE DE TICKETS PARA LA TABLA (sin cambios) ---
+// --- CONTENIDO EXPANDIBLE DE TICKETS PARA LA TABLA ---
 function TicketDetailContent({ purchase }: { purchase: PurchaseWithTickets }) {
-    const sortedTickets = useMemo(() => [...purchase.tickets].sort((a, b) => a.ticketNumber.localeCompare(b.ticketNumber, undefined, { numeric: true })), [purchase.tickets]);
+    const sortedTickets = useMemo(() =>
+        [...purchase.tickets].sort((a, b) => a.ticketNumber.localeCompare(b.ticketNumber, undefined, { numeric: true })),
+        [purchase.tickets]
+    );
+
     return (
         <div className="p-4 bg-slate-100 dark:bg-slate-900">
             <h4 className="font-semibold text-xs mb-2 text-gray-700 dark:text-gray-300 uppercase tracking-wider">Tickets Asignados ({purchase.tickets.length})</h4>
             <div className="flex flex-wrap gap-1">
-                {sortedTickets.length > 0 ? (sortedTickets.map(({ ticketNumber }) => (<Badge key={ticketNumber} variant="secondary" className="font-mono text-xs">{ticketNumber}</Badge>))
-                ) : (<p className="text-sm text-muted-foreground italic">No hay tickets asignados a esta venta.</p>)}
+                {sortedTickets.length > 0 ? (
+                    sortedTickets.map(({ ticketNumber }) => (
+                        <Badge key={ticketNumber} variant="secondary" className="font-mono text-xs">{ticketNumber}</Badge>
+                    ))
+                ) : (
+                    <p className="text-sm text-muted-foreground italic">No hay tickets asignados a esta venta.</p>
+                )}
             </div>
         </div>
     );
 }
 
+
 // ==================================================================
-// --- COMPONENTE "TOP COMPRAS" (ACTUALIZADO CON PRECIO) ---
+// --- NUEVO COMPONENTE PARA "TOP COMPRAS" (Responsive y Colapsable) ---
 // ==================================================================
 function TopPurchaseItem({ purchase }: { purchase: TopPurchase }) {
     const [isOpen, setIsOpen] = useState(false);
@@ -143,26 +161,19 @@ function TopPurchaseItem({ purchase }: { purchase: TopPurchase }) {
 
     return (
         <Collapsible open={isOpen} onOpenChange={setIsOpen} className="space-y-2">
-            <div className="flex items-center justify-between gap-2 text-sm">
+            <div className="flex items-center justify-between gap-4 text-sm">
                 {/* Parte Izquierda: Info del comprador */}
-                <div className="flex-grow min-w-0">
+                <div className="flex-grow min-w-0"> {/* Añadido para que el texto se trunque correctamente */}
                     <p className="font-semibold truncate">{purchase.buyerName || 'Comprador Anónimo'}</p>
                     <p className="text-xs text-muted-foreground truncate">en {purchase.raffle.name}</p>
                 </div>
 
-                {/* Parte Derecha: Info clave y botón para expandir */}
+                {/* Parte Derecha: Total de tickets y botón para expandir */}
                 <div className="flex items-center gap-2 shrink-0">
-                    {/* BADGE DE PRECIO (NUEVO) */}
-                    <Badge variant="secondary" className="font-semibold">
-                        {purchase.raffle.currency === 'VES' ? 'Bs.' : '$'}
-                        {parseFloat(purchase.amount).toFixed(2)}
-                    </Badge>
-                    
-                    <Badge variant="outline" className="hidden sm:inline-flex">
+                    <Badge variant="outline" className="hidden sm:inline-flex"> {/* Ocultar en pantallas muy pequeñas para dar espacio */}
                         <Ticket className="h-3 w-3 mr-1.5" />
-                        {purchase.ticketCount}
+                        {purchase.ticketCount} tickets
                     </Badge>
-
                     <CollapsibleTrigger asChild>
                         <Button variant="ghost" size="icon" className="h-8 w-8">
                             {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
@@ -190,15 +201,27 @@ function TopPurchaseItem({ purchase }: { purchase: TopPurchase }) {
 }
 
 
-// --- COMPONENTE PRINCIPAL DEL CLIENTE (SIN CAMBIOS EN SU LÓGICA) ---
+// --- COMPONENTE PRINCIPAL DEL CLIENTE (ACTUALIZADO) ---
 export function DashboardClient({ stats, revenueUsd, revenueVes, pendingPurchasesList, topPurchasesList }: DashboardClientProps) {
 
-    const containerVariants = { hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.07 } } };
-    const itemVariants = { hidden: { y: 20, opacity: 0 }, visible: { y: 0, opacity: 1, transition: { type: 'spring', stiffness: 100 } } };
+    const containerVariants = {
+        hidden: { opacity: 0 },
+        visible: { opacity: 1, transition: { staggerChildren: 0.07 } }
+    };
+
+    const itemVariants = {
+        hidden: { y: 20, opacity: 0 },
+        visible: { y: 0, opacity: 1, transition: { type: 'spring', stiffness: 100 } }
+    };
 
     return (
-        <motion.div className="space-y-4 md:space-y-8" initial="hidden" animate="visible" variants={containerVariants}>
-            {/* Grid de estadísticas */}
+        <motion.div
+            className="space-y-4 md:space-y-8"
+            initial="hidden"
+            animate="visible"
+            variants={containerVariants}
+        >
+            {/* --- Grid principal para las tarjetas de estadísticas --- */}
             <motion.div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4" variants={containerVariants}>
                 <motion.div variants={itemVariants}><StatCard title="Total Compras" value={stats.totalPurchases} icon={ShoppingCart} /></motion.div>
                 <motion.div variants={itemVariants}><StatCard title="Pendientes" value={stats.pendingPurchases} icon={Clock} /></motion.div>
@@ -206,8 +229,9 @@ export function DashboardClient({ stats, revenueUsd, revenueVes, pendingPurchase
                 <motion.div variants={itemVariants}><StatCard title="Ingresos (USD)" value={revenueUsd} icon={DollarSign} isCurrency currencySymbol="$" /></motion.div>
             </motion.div>
 
-            {/* Grid de contenido principal */}
+            {/* --- Grid para el contenido principal --- */}
             <motion.div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-8" variants={containerVariants}>
+
                 {/* Columna Izquierda: Compras Pendientes */}
                 <motion.div className="lg:col-span-2" variants={itemVariants}>
                     <Card className="h-full">
@@ -216,31 +240,59 @@ export function DashboardClient({ stats, revenueUsd, revenueVes, pendingPurchase
                             <CardDescription>Las 5 compras más recientes que requieren tu atención.</CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <div className="overflow-x-auto">
+                            <div className="overflow-x-auto"> {/* Añadido para responsividad de la tabla */}
                                 <Table>
-                                    <TableHeader><TableRow><TableHead>Comprador</TableHead><TableHead className="hidden sm:table-cell">Rifa</TableHead><TableHead className="text-right">Monto</TableHead><TableHead className="text-right">Acción</TableHead><TableHead /></TableRow></TableHeader>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Comprador</TableHead>
+                                            <TableHead className="hidden sm:table-cell">Rifa</TableHead>
+                                            <TableHead className="text-right">Monto</TableHead>
+                                            <TableHead className="text-right">Acción</TableHead>
+                                            <TableHead /> {/* Columna extra para el botón de expandir */}
+                                        </TableRow>
+                                    </TableHeader>
                                     <TableBody>
-                                        {pendingPurchasesList.length > 0 ? (pendingPurchasesList.map((purchase) => (
-                                            <Collapsible asChild key={purchase.id}>
-                                                <Fragment>
-                                                    <TableRow>
-                                                        <TableCell><div className="font-medium">{purchase.buyerName}</div><div className="text-xs text-muted-foreground hidden md:block">{purchase.buyerEmail}</div></TableCell>
-                                                        <TableCell className="hidden sm:table-cell">{purchase.raffle.name}</TableCell>
-                                                        <TableCell className="text-right font-semibold">{purchase.raffle.currency === 'VES' ? 'Bs.' : '$'}{parseFloat(purchase.amount).toFixed(2)}</TableCell>
-                                                        <TableCell className="text-right"><PurchaseDetailsModal purchase={purchase} raffleCurrency={purchase.raffle.currency} /></TableCell>
-                                                        <TableCell>
-                                                            {purchase.tickets.length > 0 && (
-                                                                <CollapsibleTrigger asChild><Button variant="ghost" size="icon" className="data-[state=open]:bg-accent"><ChevronDown className="h-4 w-4 transition-transform data-[state=open]:rotate-180" /></Button></CollapsibleTrigger>
-                                                            )}
-                                                        </TableCell>
-                                                    </TableRow>
-                                                    <CollapsibleContent asChild>
-                                                        <TableRow><TableCell colSpan={5} className="p-0"><TicketDetailContent purchase={purchase} /></TableCell></TableRow>
-                                                    </CollapsibleContent>
-                                                </Fragment>
-                                            </Collapsible>)))
-                                            : (<TableRow><TableCell colSpan={5} className="h-24 text-center">¡Todo al día! No hay compras pendientes.</TableCell></TableRow>
-                                            )}
+                                        {pendingPurchasesList.length > 0 ? (
+                                            pendingPurchasesList.map((purchase) => (
+                                                <Collapsible asChild key={purchase.id}>
+                                                    <Fragment>
+                                                        <TableRow>
+                                                            <TableCell>
+                                                                <div className="font-medium">{purchase.buyerName}</div>
+                                                                <div className="text-xs text-muted-foreground hidden md:block">{purchase.buyerEmail}</div>
+                                                            </TableCell>
+                                                            <TableCell className="hidden sm:table-cell">{purchase.raffle.name}</TableCell>
+                                                            <TableCell className="text-right font-semibold">
+                                                                {purchase.raffle.currency === 'VES' ? 'Bs.' : '$'}{parseFloat(purchase.amount).toFixed(2)}
+                                                            </TableCell>
+                                                            <TableCell className="text-right">
+                                                                <PurchaseDetailsModal purchase={purchase} raffleCurrency={purchase.raffle.currency} />
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                {purchase.tickets.length > 0 && (
+                                                                    <CollapsibleTrigger asChild>
+                                                                        <Button variant="ghost" size="icon" className="data-[state=open]:bg-accent">
+                                                                            <ChevronDown className="h-4 w-4 transition-transform data-[state=open]:rotate-180" />
+                                                                        </Button>
+                                                                    </CollapsibleTrigger>
+                                                                )}
+                                                            </TableCell>
+                                                        </TableRow>
+                                                        <CollapsibleContent asChild>
+                                                            <TableRow>
+                                                                <TableCell colSpan={5} className="p-0">
+                                                                    <TicketDetailContent purchase={purchase} />
+                                                                </TableCell>
+                                                            </TableRow>
+                                                        </CollapsibleContent>
+                                                    </Fragment>
+                                                </Collapsible>
+                                            ))
+                                        ) : (
+                                            <TableRow>
+                                                <TableCell colSpan={5} className="h-24 text-center">¡Todo al día! No hay compras pendientes.</TableCell>
+                                            </TableRow>
+                                        )}
                                     </TableBody>
                                 </Table>
                             </div>
@@ -252,23 +304,36 @@ export function DashboardClient({ stats, revenueUsd, revenueVes, pendingPurchase
                 <motion.div className="space-y-4 md:space-y-8" variants={containerVariants}>
                     <motion.div variants={itemVariants}>
                         <Card>
-                            <CardHeader><CardTitle>Resumen de Compras</CardTitle></CardHeader>
+                            <CardHeader>
+                                <CardTitle>Resumen de Compras</CardTitle>
+                            </CardHeader>
                             <CardContent>
                                 <PurchaseStatusChart confirmed={stats.confirmedPurchases} pending={stats.pendingPurchases} />
-                                <div className="flex justify-center gap-4 text-xs mt-2 text-muted-foreground"><div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-emerald-500"></span>Confirmadas</div><div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-amber-500"></span>Pendientes</div></div>
+                                <div className="flex justify-center gap-4 text-xs mt-2 text-muted-foreground">
+                                    <div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-emerald-500"></span>Confirmadas</div>
+                                    <div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-amber-500"></span>Pendientes</div>
+                                </div>
                             </CardContent>
                         </Card>
                     </motion.div>
                     <motion.div variants={itemVariants}>
                         <Card>
                             <CardHeader>
-                                <CardTitle className="flex items-center gap-2"><Trophy className="h-5 w-5 text-amber-500" />Top Compras por Tickets</CardTitle>
+                                <CardTitle className="flex items-center gap-2">
+                                    <Trophy className="h-5 w-5 text-amber-500" />
+                                    Top Compras por Tickets
+                                </CardTitle>
                             </CardHeader>
                             <CardContent>
                                 <div className="space-y-4">
-                                    {topPurchasesList.length > 0 ? (topPurchasesList.map((purchase) => (
-                                        <TopPurchaseItem key={purchase.id} purchase={purchase} />
-                                    ))) : (<p className="text-sm text-center text-muted-foreground py-8">No hay compras destacadas.</p>)}
+                                    {topPurchasesList.length > 0 ? (
+                                        topPurchasesList.map((purchase) => (
+                                            // Usamos el nuevo componente aquí
+                                            <TopPurchaseItem key={purchase.id} purchase={purchase} />
+                                        ))
+                                    ) : (
+                                        <p className="text-sm text-center text-muted-foreground py-8">No hay compras destacadas.</p>
+                                    )}
                                 </div>
                             </CardContent>
                         </Card>
