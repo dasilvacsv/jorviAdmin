@@ -1,19 +1,19 @@
 // app/dashboard/page.tsx
 
-import { db } from '@/lib/db';
-import { purchases, raffles } from '@/lib/db/schema';
+// ... importaciones
+import { tickets, purchases, raffles } from '@/lib/db/schema';
 import { eq, count, desc, sql } from 'drizzle-orm';
 import { DashboardClient } from './dashboard-client';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { PlusCircle } from 'lucide-react';
+import { db } from '@/db';
 
-// --- FUNCIÓN PARA OBTENER DATOS (CORREGIDA SIN LA RELACIÓN DE USUARIO) ---
 async function getDashboardData() {
     const [
       statsResult,
       pendingPurchasesList,
-      topPurchasesList,
+      topPurchasesList, // ✅ Consulta de top compras actualizada
     ] = await Promise.all([
       // 1. Consulta de estadísticas (sin cambios)
       db.select({
@@ -26,7 +26,7 @@ async function getDashboardData() {
       .from(purchases)
       .leftJoin(raffles, eq(purchases.raffleId, raffles.id)),
       
-      // 2. Compras pendientes (YA NO INCLUYE 'user')
+      // 2. Compras pendientes (sin cambios)
       db.query.purchases.findMany({
         where: eq(purchases.status, 'pending'),
         with: { 
@@ -36,16 +36,17 @@ async function getDashboardData() {
         limit: 5,
       }),
  
-      // 3. Top 5 compras (YA NO INCLUYE 'user')
+      // 3. Top 5 compras (✅ CON TICKETS)
       db.query.purchases.findMany({
           orderBy: desc(purchases.ticketCount),
           limit: 5,
           with: { 
-              raffle: { columns: { name: true } } 
+            raffle: { columns: { name: true } },
+            tickets: { columns: { ticketNumber: true } } // ✅ AÑADIDO: Obtener los números de ticket
           }
       })
     ]);
- 
+
     const stats = statsResult[0] || { totalPurchases: 0, pendingPurchases: 0, confirmedPurchases: 0, totalRevenueUsd: 0, totalRevenueVes: 0 };
     
     return {
@@ -60,7 +61,6 @@ async function getDashboardData() {
         topPurchasesList,
     };
 }
-
 
 export default async function DashboardPage() {
     const data = await getDashboardData();
@@ -85,12 +85,12 @@ export default async function DashboardPage() {
                         <p className="text-muted-foreground">Un resumen de la actividad reciente.</p>
                     </div>
                     <div className="hidden lg:block">
-                         <Link href="/rifas/nuevo">
-                            <Button className={primaryButtonClasses}>
-                                <PlusCircle className="mr-2 h-4 w-4" />
-                                Crear Nueva Rifa
-                            </Button>
-                        </Link>
+                             <Link href="/rifas/nuevo">
+                                 <Button className={primaryButtonClasses}>
+                                     <PlusCircle className="mr-2 h-4 w-4" />
+                                     Crear Nueva Rifa
+                                 </Button>
+                             </Link>
                     </div>
                 </div>
                 
