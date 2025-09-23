@@ -770,23 +770,26 @@ export async function updateRaffleStatusAction(prevState: ActionState, formData:
       await tx.update(raffles).set({ status, updatedAt: new Date() }).where(eq(raffles.id, raffleId));
 
       if (currentRaffle.status === 'draft' && status === 'active') {
-        const ticketsToGenerate = [];
-        
-        for (let i = 0; i < 10000; i++) {
-          const ticketNumber = i.toString().padStart(4, '0');
-          ticketsToGenerate.push({
-            ticketNumber,
-            raffleId,
-            status: 'available' as const,
-          });
+    console.log(`Iniciando generación masiva de tickets para la rifa ${raffleId}...`);
+
+    // 1. Prepara todos los tickets en un solo array, como antes.
+    const ticketsToGenerate = [];
+    for (let i = 0; i < 10000; i++) {
+        const ticketNumber = i.toString().padStart(4, '0');
+        ticketsToGenerate.push({
+            ticketNumber,
+            raffleId,
+            status: 'available' as const,
+        });
+        
         }
 
-        const batchSize = 1000;
-        for (let i = 0; i < ticketsToGenerate.length; i += batchSize) {
-          const batch = ticketsToGenerate.slice(i, i + batchSize);
-          await tx.insert(tickets).values(batch);
-        }
-      }
+
+
+        await tx.insert(tickets).values(ticketsToGenerate);
+
+    console.log(`¡${ticketsToGenerate.length} tickets generados exitosamente en una sola operación!`);
+}
     });
 
     revalidatePath("/rifas");
