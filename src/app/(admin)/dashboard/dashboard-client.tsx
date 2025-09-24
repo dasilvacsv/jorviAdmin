@@ -94,6 +94,7 @@ const PurchaseStatusChart = ({ confirmed, pending, rejected }: { confirmed: numb
 
 // --- COMPONENTES ESPECÍFICOS PARA EL DASHBOARD ---
 
+// Este componente ya no se usa en la tabla de pendientes, pero se puede mantener por si se usa en otro lugar.
 function TicketDetailContent({ purchase }: { purchase: PurchaseWithTickets }) {
     const sortedTickets = useMemo(() =>
         [...(purchase.tickets || [])].sort((a, b) => a.ticketNumber.localeCompare(b.ticketNumber, undefined, { numeric: true })),
@@ -136,28 +137,21 @@ export function DashboardClient({ stats, revenueUsd, revenueVes, pendingPurchase
                         <CardContent>
                             <div className="overflow-x-auto">
                                 <Table>
-                                    <TableHeader><TableRow><TableHead>Comprador</TableHead><TableHead className="hidden sm:table-cell">Rifa</TableHead><TableHead className="text-right">Monto</TableHead><TableHead className="text-right">Acción</TableHead><TableHead /></TableRow></TableHeader>
+                                    {/* CAMBIO: Se eliminó la última cabecera vacía */}
+                                    <TableHeader><TableRow><TableHead>Comprador</TableHead><TableHead className="hidden sm:table-cell">Rifa</TableHead><TableHead className="text-right">Monto</TableHead><TableHead className="text-right">Acción</TableHead></TableRow></TableHeader>
                                     <TableBody>
                                         {pendingPurchasesList?.length > 0 ? (pendingPurchasesList.map((purchase) => (
-                                            <Collapsible asChild key={purchase.id}>
-                                                <Fragment>
-                                                    <TableRow>
-                                                        <TableCell><div className="font-medium">{purchase.buyerName}</div><div className="text-xs text-muted-foreground hidden md:block">{purchase.buyerEmail}</div></TableCell>
-                                                        <TableCell className="hidden sm:table-cell">{purchase.raffle.name}</TableCell>
-                                                        <TableCell className="text-right font-semibold">{purchase.raffle.currency === 'VES' ? 'Bs.' : '$'}{parseFloat(purchase.amount).toFixed(2)}</TableCell>
-                                                        <TableCell className="text-right"><PurchaseDetailsModal purchase={purchase} raffleCurrency={purchase.raffle.currency} /></TableCell>
-                                                        <TableCell>
-                                                            {purchase.tickets?.length > 0 && (
-                                                                <CollapsibleTrigger asChild><Button variant="ghost" size="icon" className="data-[state=open]:bg-accent"><ChevronDown className="h-4 w-4 transition-transform data-[state=open]:rotate-180" /></Button></CollapsibleTrigger>
-                                                            )}
-                                                        </TableCell>
-                                                    </TableRow>
-                                                    <CollapsibleContent asChild>
-                                                        <TableRow><TableCell colSpan={5} className="p-0"><TicketDetailContent purchase={purchase} /></TableCell></TableRow>
-                                                    </CollapsibleContent>
-                                                </Fragment>
-                                            </Collapsible>)))
-                                            : (<TableRow><TableCell colSpan={5} className="h-24 text-center">¡Todo al día! No hay compras pendientes.</TableCell></TableRow>
+                                            // CAMBIO: Se eliminó el componente Collapsible y Fragment. Ahora es solo una TableRow.
+                                            <TableRow key={purchase.id}>
+                                                <TableCell><div className="font-medium">{purchase.buyerName}</div><div className="text-xs text-muted-foreground hidden md:block">{purchase.buyerEmail}</div></TableCell>
+                                                <TableCell className="hidden sm:table-cell">{purchase.raffle.name}</TableCell>
+                                                <TableCell className="text-right font-semibold">{purchase.raffle.currency === 'VES' ? 'Bs.' : '$'}{parseFloat(purchase.amount).toFixed(2)}</TableCell>
+                                                <TableCell className="text-right"><PurchaseDetailsModal purchase={purchase} raffleCurrency={purchase.raffle.currency} /></TableCell>
+                                                {/* CAMBIO: Se eliminó la celda (TableCell) que contenía el botón del desplegable. */}
+                                            </TableRow>
+                                        )))
+                                            // CAMBIO: Se ajustó el colSpan de 5 a 4.
+                                            : (<TableRow><TableCell colSpan={4} className="h-24 text-center">¡Todo al día! No hay compras pendientes.</TableCell></TableRow>
                                             )}
                                     </TableBody>
                                 </Table>
@@ -172,9 +166,9 @@ export function DashboardClient({ stats, revenueUsd, revenueVes, pendingPurchase
                             <CardContent>
                                 <PurchaseStatusChart confirmed={stats.confirmedPurchases} pending={stats.pendingPurchases} rejected={stats.rejectedPurchases} />
                                 <div className="flex justify-center flex-wrap gap-4 text-xs mt-2 text-muted-foreground">
-                                  <div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-emerald-500"></span>Confirmadas</div>
-                                  <div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-amber-500"></span>Pendientes</div>
-                                  <div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-red-500"></span>Rechazadas</div>
+                                    <div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-emerald-500"></span>Confirmadas</div>
+                                    <div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-amber-500"></span>Pendientes</div>
+                                    <div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-red-500"></span>Rechazadas</div>
                                 </div>
                             </CardContent>
                         </Card>
