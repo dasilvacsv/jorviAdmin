@@ -4,12 +4,12 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { PurchaseDetailsModal } from '@/components/rifas/purchase-details-modal';
-import { DollarSign, ShoppingCart, Clock, CheckCircle, Trophy, BarChart2, Ticket, ChevronDown, ChevronRight } from 'lucide-react';
+import { DollarSign, ShoppingCart, Clock, CheckCircle, Trophy, BarChart2, Ticket, ChevronDown } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import CountUp from 'react-countup';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 
 // --- TIPOS DE DATOS ---
@@ -20,19 +20,16 @@ type PurchaseWithTickets = {
     ticketCount: number;
     amount: string;
     raffle: { name: string; currency: "USD" | "VES"; };
-    tickets?: { ticketNumber: string }[]; // 'tickets' es opcional
+    tickets?: { ticketNumber: string }[];
 };
 
-type TopPurchase = {
-    id: string;
+// Nuevo tipo para los mejores compradores
+type TopBuyer = {
     buyerName: string | null;
-    ticketCount: number;
-    amount: string;
-    raffle: {
-        name: string;
-        currency: "USD" | "VES";
-    };
-    tickets?: { ticketNumber: string }[]; // 'tickets' es opcional
+    buyerEmail: string;
+    totalTickets: number;
+    totalAmountUsd: number;
+    totalAmountVes: number;
 }
 
 type DashboardClientProps = {
@@ -44,34 +41,9 @@ type DashboardClientProps = {
     revenueUsd: number;
     revenueVes: number;
     pendingPurchasesList: PurchaseWithTickets[];
-    topPurchasesList: TopPurchase[];
+    topBuyersList: TopBuyer[]; // Prop actualizada
 };
 
-// --- COMPONENTE AUXILIAR para agrupar tickets ---
-function groupTickets(tickets?: { ticketNumber: string }[]): string[] {
-    if (!tickets || tickets.length === 0) {
-        return [];
-    }
-    const ticketNumbers = tickets.map(t => parseInt(t.ticketNumber, 10)).sort((a, b) => a - b);
-    const ranges: string[] = [];
-    let start = ticketNumbers[0];
-    let end = ticketNumbers[0];
-    for (let i = 1; i < ticketNumbers.length; i++) {
-        const current = ticketNumbers[i];
-        const prev = ticketNumbers[i - 1];
-        if (current === prev + 1) {
-            end = current;
-        } else {
-            if (start === end) { ranges.push(String(start).padStart(4, '0')); }
-            else { ranges.push(`${String(start).padStart(4, '0')}-${String(end).padStart(4, '0')}`); }
-            start = current;
-            end = current;
-        }
-    }
-    if (start === end) { ranges.push(String(start).padStart(4, '0')); }
-    else { ranges.push(`${String(start).padStart(4, '0')}-${String(end).padStart(4, '0')}`); }
-    return ranges;
-}
 
 // --- COMPONENTES DE UI REUTILIZABLES ---
 
@@ -108,6 +80,7 @@ const PurchaseStatusChart = ({ confirmed, pending }: { confirmed: number, pendin
     );
 };
 
+
 // --- COMPONENTES ESPECÍFICOS PARA EL DASHBOARD ---
 
 function TicketDetailContent({ purchase }: { purchase: PurchaseWithTickets }) {
@@ -129,51 +102,9 @@ function TicketDetailContent({ purchase }: { purchase: PurchaseWithTickets }) {
     );
 }
 
-function TopPurchaseItem({ purchase }: { purchase: TopPurchase }) {
-    const [isOpen, setIsOpen] = useState(false);
-    const groupedTicketRanges = useMemo(() => groupTickets(purchase.tickets), [purchase.tickets]);
-
-    return (
-        <Collapsible open={isOpen} onOpenChange={setIsOpen} className="space-y-2">
-            <div className="flex items-center justify-between gap-2 text-sm">
-                <div className="flex-grow min-w-0">
-                    <p className="font-semibold truncate">{purchase.buyerName || 'Comprador Anónimo'}</p>
-                    <p className="text-xs text-muted-foreground truncate">en {purchase.raffle.name}</p>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                    <Badge variant="secondary" className="font-semibold">
-                        {purchase.raffle.currency === 'VES' ? 'Bs.' : '$'}
-                        {parseFloat(purchase.amount).toFixed(2)}
-                    </Badge>
-                    {(purchase.tickets?.length ?? 0) > 0 && (
-                        <CollapsibleTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                                {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                                <span className="sr-only">{isOpen ? 'Ocultar tickets' : 'Mostrar tickets'}</span>
-                            </Button>
-                        </CollapsibleTrigger>
-                    )}
-                </div>
-            </div>
-            <CollapsibleContent>
-                <div className="pl-2 pt-2 border-l-2 ml-1 border-dashed">
-                    <div className="flex flex-wrap gap-1.5">
-                        <Badge variant="outline" className="sm:hidden">
-                            <Ticket className="h-3 w-3 mr-1.5" />
-                            {purchase.ticketCount} tickets
-                        </Badge>
-                        {groupedTicketRanges.map((range, index) => (
-                            <Badge key={index} variant="secondary" className="font-mono text-xs"><Ticket className="h-3 w-3 mr-1" />{range}</Badge>
-                        ))}
-                    </div>
-                </div>
-            </CollapsibleContent>
-        </Collapsible>
-    );
-}
 
 // --- COMPONENTE PRINCIPAL DEL CLIENTE ---
-export function DashboardClient({ stats, revenueUsd, revenueVes, pendingPurchasesList, topPurchasesList }: DashboardClientProps) {
+export function DashboardClient({ stats, revenueUsd, revenueVes, pendingPurchasesList, topBuyersList }: DashboardClientProps) {
 
     const containerVariants = { hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.07 } } };
     const itemVariants = { hidden: { y: 20, opacity: 0 }, visible: { y: 0, opacity: 1, transition: { type: 'spring', stiffness: 100 } } };
@@ -232,14 +163,36 @@ export function DashboardClient({ stats, revenueUsd, revenueVes, pendingPurchase
                             </CardContent>
                         </Card>
                     </motion.div>
+                    
+                    {/* SECCIÓN DE TOP COMPRADORES ACTUALIZADA */}
                     <motion.div variants={itemVariants}>
                         <Card>
-                            <CardHeader><CardTitle className="flex items-center gap-2"><Trophy className="h-5 w-5 text-amber-500" />Top Compras</CardTitle></CardHeader>
+                            <CardHeader><CardTitle className="flex items-center gap-2"><Trophy className="h-5 w-5 text-amber-500" />Top Compradores</CardTitle></CardHeader>
                             <CardContent>
                                 <div className="space-y-4">
-                                    {topPurchasesList?.length > 0 ? (topPurchasesList.map((purchase) => (
-                                        <TopPurchaseItem key={purchase.id} purchase={purchase} />
-                                    ))) : (<p className="text-sm text-center text-muted-foreground py-8">No hay compras destacadas.</p>)}
+                                    {topBuyersList?.length > 0 ? (
+                                        topBuyersList.map((buyer) => (
+                                            <div key={buyer.buyerEmail} className="flex items-center justify-between gap-2 text-sm">
+                                                <div className="flex-grow min-w-0">
+                                                    <p className="font-semibold truncate">{buyer.buyerName || 'Anónimo'}</p>
+                                                    <p className="text-xs text-muted-foreground truncate">{buyer.buyerEmail}</p>
+                                                </div>
+                                                <div className="flex flex-col items-end shrink-0">
+                                                    <Badge variant="secondary" className="font-semibold flex items-center gap-1.5">
+                                                        <Ticket className="h-3 w-3" />
+                                                        {buyer.totalTickets}
+                                                    </Badge>
+                                                    <p className="text-xs text-muted-foreground mt-1">
+                                                        {buyer.totalAmountUsd > 0 && `$${buyer.totalAmountUsd.toFixed(2)}`}
+                                                        {buyer.totalAmountUsd > 0 && buyer.totalAmountVes > 0 && ' + '}
+                                                        {buyer.totalAmountVes > 0 && `Bs.${buyer.totalAmountVes.toFixed(2)}`}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        ))
+                                    ) : (
+                                        <p className="text-sm text-center text-muted-foreground py-8">No hay compras confirmadas para mostrar un ranking.</p>
+                                    )}
                                 </div>
                             </CardContent>
                         </Card>

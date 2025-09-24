@@ -1,8 +1,7 @@
 // app/dashboard/page.tsx
 
-// ... importaciones
 import { tickets, purchases, raffles } from '@/lib/db/schema';
-import { eq, count, desc, sql } from 'drizzle-orm';
+import { eq, count, desc, sql, sum } from 'drizzle-orm';
 import { DashboardClient } from './dashboard-client';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
@@ -11,40 +10,47 @@ import { db } from '@/db';
 
 async function getDashboardData() {
     const [
-      statsResult,
-      pendingPurchasesList,
-      topPurchasesList, // ✅ Consulta de top compras actualizada
+        statsResult,
+        pendingPurchasesList,
+        topBuyersList, // Renombrado para mayor claridad
     ] = await Promise.all([
-      // 1. Consulta de estadísticas (sin cambios)
-      db.select({
-        totalPurchases: count(),
-        pendingPurchases: sql<number>`count(CASE WHEN ${purchases.status} = 'pending' THEN 1 END)`.mapWith(Number),
-        confirmedPurchases: sql<number>`count(CASE WHEN ${purchases.status} = 'confirmed' THEN 1 END)`.mapWith(Number),
-        totalRevenueUsd: sql<number>`sum(CASE WHEN ${purchases.status} = 'confirmed' AND ${raffles.currency} = 'USD' THEN ${purchases.amount}::decimal ELSE 0 END)`.mapWith(Number),
-        totalRevenueVes: sql<number>`sum(CASE WHEN ${purchases.status} = 'confirmed' AND ${raffles.currency} = 'VES' THEN ${purchases.amount}::decimal ELSE 0 END)`.mapWith(Number),
-      })
-      .from(purchases)
-      .leftJoin(raffles, eq(purchases.raffleId, raffles.id)),
-      
-      // 2. Compras pendientes (sin cambios)
-      db.query.purchases.findMany({
-        where: eq(purchases.status, 'pending'),
-        with: { 
-            raffle: { columns: { name: true, currency: true } } 
-        },
-        orderBy: desc(purchases.createdAt),
-        limit: 5,
-      }),
- 
-      // 3. Top 5 compras (✅ CON TICKETS)
-      db.query.purchases.findMany({
-          orderBy: desc(purchases.ticketCount),
-          limit: 5,
-          with: { 
-            raffle: { columns: { name: true } },
-            tickets: { columns: { ticketNumber: true } } // ✅ AÑADIDO: Obtener los números de ticket
-          }
-      })
+        // 1. Consulta de estadísticas (sin cambios)
+        db.select({
+            totalPurchases: count(),
+            pendingPurchases: sql<number>`count(CASE WHEN ${purchases.status} = 'pending' THEN 1 END)`.mapWith(Number),
+            confirmedPurchases: sql<number>`count(CASE WHEN ${purchases.status} = 'confirmed' THEN 1 END)`.mapWith(Number),
+            totalRevenueUsd: sql<number>`sum(CASE WHEN ${purchases.status} = 'confirmed' AND ${raffles.currency} = 'USD' THEN ${purchases.amount}::decimal ELSE 0 END)`.mapWith(Number),
+            totalRevenueVes: sql<number>`sum(CASE WHEN ${purchases.status} = 'confirmed' AND ${raffles.currency} = 'VES' THEN ${purchases.amount}::decimal ELSE 0 END)`.mapWith(Number),
+        })
+        .from(purchases)
+        .leftJoin(raffles, eq(purchases.raffleId, raffles.id)),
+        
+        // 2. Compras pendientes (actualizado para incluir tickets)
+        db.query.purchases.findMany({
+            where: eq(purchases.status, 'pending'),
+            with: { 
+                raffle: { columns: { name: true, currency: true } },
+                tickets: { columns: { ticketNumber: true } } // Se obtienen los tickets
+            },
+            orderBy: desc(purchases.createdAt),
+            limit: 5,
+        }),
+
+        // 3. 🏆 TOP 5 COMPRADORES (LÓGICA ACTUALIZADA) 🏆
+        // Agrupa por email, suma los tickets y montos, y ordena por el total de tickets.
+        db.select({
+            buyerName: purchases.buyerName,
+            buyerEmail: purchases.buyerEmail,
+            totalTickets: sql<number>`sum(${purchases.ticketCount})`.mapWith(Number),
+            totalAmountUsd: sql<number>`sum(CASE WHEN ${raffles.currency} = 'USD' THEN ${purchases.amount}::decimal ELSE 0 END)`.mapWith(Number),
+            totalAmountVes: sql<number>`sum(CASE WHEN ${raffles.currency} = 'VES' THEN ${purchases.amount}::decimal ELSE 0 END)`.mapWith(Number),
+        })
+        .from(purchases)
+        .leftJoin(raffles, eq(purchases.raffleId, raffles.id))
+        .where(eq(purchases.status, 'confirmed')) // Solo contamos compras confirmadas
+        .groupBy(purchases.buyerEmail, purchases.buyerName)
+        .orderBy(desc(sql`sum(${purchases.ticketCount})`))
+        .limit(5),
     ]);
 
     const stats = statsResult[0] || { totalPurchases: 0, pendingPurchases: 0, confirmedPurchases: 0, totalRevenueUsd: 0, totalRevenueVes: 0 };
@@ -58,7 +64,7 @@ async function getDashboardData() {
         revenueUsd: stats.totalRevenueUsd,
         revenueVes: stats.totalRevenueVes,
         pendingPurchasesList,
-        topPurchasesList,
+        topBuyersList, // Renombrado
     };
 }
 
@@ -85,12 +91,12 @@ export default async function DashboardPage() {
                         <p className="text-muted-foreground">Un resumen de la actividad reciente.</p>
                     </div>
                     <div className="hidden lg:block">
-                             <Link href="/rifas/nuevo">
-                                 <Button className={primaryButtonClasses}>
-                                     <PlusCircle className="mr-2 h-4 w-4" />
-                                     Crear Nueva Rifa
-                                 </Button>
-                             </Link>
+                        <Link href="/rifas/nuevo">
+                            <Button className={primaryButtonClasses}>
+                                <PlusCircle className="mr-2 h-4 w-4" />
+                                Crear Nueva Rifa
+                            </Button>
+                        </Link>
                     </div>
                 </div>
                 
