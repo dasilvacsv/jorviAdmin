@@ -37,7 +37,8 @@ import { useFormState } from "react-dom";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+// Se elimina Tooltip ya que no se usará
+// import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface Purchase {
     id: string;
@@ -170,7 +171,6 @@ export function PurchaseDetailsModal({ purchase, raffleCurrency = 'USD' }: Purch
     const [rejectionReason, setRejectionReason] = useState<'invalid_payment' | 'malicious' | ''>('');
     const [rejectionComment, setRejectionComment] = useState('');
     
-    // ✅ NUEVO: Estados para la información editable
     const [purchaseData, setPurchaseData] = useState(purchase);
 
     const [state, formAction] = useFormState(updatePurchaseStatusAction, { success: false, message: "" });
@@ -192,10 +192,8 @@ export function PurchaseDetailsModal({ purchase, raffleCurrency = 'USD' }: Purch
         }
     }, [state, toast]);
 
-    // ✅ NUEVO: Funciones para actualizar la información
     const handleEmailChange = async (newEmail: string) => {
         try {
-            // Aquí puedes hacer una llamada al servidor para actualizar el email
             setPurchaseData(prev => ({ ...prev, buyerEmail: newEmail }));
             toast({
                 title: "Éxito",
@@ -213,7 +211,6 @@ export function PurchaseDetailsModal({ purchase, raffleCurrency = 'USD' }: Purch
 
     const handlePhoneChange = async (newPhone: string) => {
         try {
-            // Aquí puedes hacer una llamada al servidor para actualizar el teléfono
             setPurchaseData(prev => ({ ...prev, buyerPhone: newPhone }));
             toast({
                 title: "Éxito",
@@ -235,7 +232,10 @@ export function PurchaseDetailsModal({ purchase, raffleCurrency = 'USD' }: Purch
     };
 
     const isRejectButtonDisabled = !rejectionReason || (rejectionReason === 'malicious' && rejectionComment.trim() === '');
-    const canBeConfirmed = !!purchaseData.paymentScreenshotUrl;
+    
+    // ✅ CAMBIO PRINCIPAL: Se elimina la validación del comprobante.
+    // El botón de confirmar ahora siempre estará habilitado.
+    const canBeConfirmed = true; 
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>
@@ -252,7 +252,6 @@ export function PurchaseDetailsModal({ purchase, raffleCurrency = 'USD' }: Purch
 
                 <div className="flex-1 overflow-y-auto p-6 bg-slate-50">
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                        {/* ✅ MODIFICADO: Panel 1 con campos editables */}
                         <Card className="shadow-none border border-slate-200 group">
                             <CardHeader>
                                 <CardTitle className="flex items-center gap-2 text-lg">
@@ -281,7 +280,6 @@ export function PurchaseDetailsModal({ purchase, raffleCurrency = 'USD' }: Purch
                             </CardContent>
                         </Card>
 
-                        {/* Panel 2: Sin cambios */}
                         <Card className="shadow-none border border-slate-200">
                             <CardHeader>
                                 <CardTitle className="flex items-center gap-2 text-lg">
@@ -297,7 +295,6 @@ export function PurchaseDetailsModal({ purchase, raffleCurrency = 'USD' }: Purch
                             </CardContent>
                         </Card>
 
-                        {/* Panel 3: Sin cambios */}
                         <Card className="shadow-none border border-slate-200 order-first lg:order-last">
                             <CardHeader>
                                 <CardTitle className="flex items-center gap-2 text-lg">
@@ -329,7 +326,6 @@ export function PurchaseDetailsModal({ purchase, raffleCurrency = 'USD' }: Purch
                     </div>
                 </div>
 
-                {/* Footer: Sin cambios significativos */}
                 <DialogFooter className="p-4 border-t flex-col-reverse sm:flex-row sm:justify-end gap-2 bg-white">
                     {purchaseData.status === 'pending' ? (
                         <>
@@ -366,25 +362,13 @@ export function PurchaseDetailsModal({ purchase, raffleCurrency = 'USD' }: Purch
                                 </DialogContent>
                             </Dialog>
 
+                            {/* ✅ CAMBIO: Se elimina el Tooltip y la propiedad 'disabled' del botón */}
                             <AlertDialog>
-                                <TooltipProvider>
-                                    <Tooltip>
-                                        <TooltipTrigger asChild>
-                                            <div className={!canBeConfirmed ? 'cursor-not-allowed w-full sm:w-auto' : 'w-full sm:w-auto'}>
-                                                <AlertDialogTrigger asChild>
-                                                    <Button type="button" disabled={!canBeConfirmed} className="w-full bg-orange-500 hover:bg-orange-600 text-white disabled:opacity-50 disabled:cursor-not-allowed">
-                                                        <Check className="h-4 w-4 mr-2" /> Confirmar
-                                                    </Button>
-                                                </AlertDialogTrigger>
-                                            </div>
-                                        </TooltipTrigger>
-                                        {!canBeConfirmed && (
-                                            <TooltipContent>
-                                                <p>Se requiere un comprobante para confirmar.</p>
-                                            </TooltipContent>
-                                        )}
-                                    </Tooltip>
-                                </TooltipProvider>
+                                <AlertDialogTrigger asChild>
+                                    <Button type="button" className="w-full bg-orange-500 hover:bg-orange-600 text-white">
+                                        <Check className="h-4 w-4 mr-2" /> Confirmar
+                                    </Button>
+                                </AlertDialogTrigger>
                                 <AlertDialogContent>
                                     <AlertDialogHeader>
                                         <AlertDialogTitle>¿Confirmar esta compra?</AlertDialogTitle>
