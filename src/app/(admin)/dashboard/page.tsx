@@ -12,32 +12,29 @@ async function getDashboardData() {
     const [
         statsResult,
         pendingPurchasesList,
-        topBuyersList, // Renombrado para mayor claridad
+        topBuyersList,
     ] = await Promise.all([
-        // 1. Consulta de estadísticas (sin cambios)
         db.select({
             totalPurchases: count(),
             pendingPurchases: sql<number>`count(CASE WHEN ${purchases.status} = 'pending' THEN 1 END)`.mapWith(Number),
             confirmedPurchases: sql<number>`count(CASE WHEN ${purchases.status} = 'confirmed' THEN 1 END)`.mapWith(Number),
+            rejectedPurchases: sql<number>`count(CASE WHEN ${purchases.status} = 'rejected' THEN 1 END)`.mapWith(Number),
             totalRevenueUsd: sql<number>`sum(CASE WHEN ${purchases.status} = 'confirmed' AND ${raffles.currency} = 'USD' THEN ${purchases.amount}::decimal ELSE 0 END)`.mapWith(Number),
             totalRevenueVes: sql<number>`sum(CASE WHEN ${purchases.status} = 'confirmed' AND ${raffles.currency} = 'VES' THEN ${purchases.amount}::decimal ELSE 0 END)`.mapWith(Number),
         })
         .from(purchases)
         .leftJoin(raffles, eq(purchases.raffleId, raffles.id)),
         
-        // 2. Compras pendientes (actualizado para incluir tickets)
         db.query.purchases.findMany({
             where: eq(purchases.status, 'pending'),
             with: { 
                 raffle: { columns: { name: true, currency: true } },
-                tickets: { columns: { ticketNumber: true } } // Se obtienen los tickets
+                tickets: { columns: { ticketNumber: true } }
             },
             orderBy: desc(purchases.createdAt),
             limit: 5,
         }),
 
-        // 3. 🏆 TOP 5 COMPRADORES (LÓGICA ACTUALIZADA) 🏆
-        // Agrupa por email, suma los tickets y montos, y ordena por el total de tickets.
         db.select({
             buyerName: purchases.buyerName,
             buyerEmail: purchases.buyerEmail,
@@ -47,24 +44,25 @@ async function getDashboardData() {
         })
         .from(purchases)
         .leftJoin(raffles, eq(purchases.raffleId, raffles.id))
-        .where(eq(purchases.status, 'confirmed')) // Solo contamos compras confirmadas
+        .where(eq(purchases.status, 'confirmed'))
         .groupBy(purchases.buyerEmail, purchases.buyerName)
         .orderBy(desc(sql`sum(${purchases.ticketCount})`))
         .limit(5),
     ]);
 
-    const stats = statsResult[0] || { totalPurchases: 0, pendingPurchases: 0, confirmedPurchases: 0, totalRevenueUsd: 0, totalRevenueVes: 0 };
+    const stats = statsResult[0] || { totalPurchases: 0, pendingPurchases: 0, confirmedPurchases: 0, rejectedPurchases: 0, totalRevenueUsd: 0, totalRevenueVes: 0 };
     
     return {
         stats: {
             totalPurchases: stats.totalPurchases,
             pendingPurchases: stats.pendingPurchases,
             confirmedPurchases: stats.confirmedPurchases,
+            rejectedPurchases: stats.rejectedPurchases,
         },
         revenueUsd: stats.totalRevenueUsd,
         revenueVes: stats.totalRevenueVes,
         pendingPurchasesList,
-        topBuyersList, // Renombrado
+        topBuyersList,
     };
 }
 
@@ -74,7 +72,6 @@ export default async function DashboardPage() {
 
     return (
         <div className="min-h-screen w-full bg-slate-50 dark:bg-slate-950">
-            {/* --- Botón flotante para crear rifa en móviles (FAB) --- */}
             <div className="fixed bottom-6 right-6 z-50 lg:hidden">
                 <Link href="/rifas/nuevo">
                     <Button size="icon" className={`h-14 w-14 rounded-full shadow-xl ${primaryButtonClasses}`}>
@@ -84,7 +81,6 @@ export default async function DashboardPage() {
             </div>
             
             <main className="p-4 sm:p-6 lg:p-8">
-                {/* --- Encabezado de la página --- */}
                 <div className="flex items-center justify-between mb-8">
                     <div>
                         <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">Panel de Control</h1>
@@ -100,9 +96,9 @@ export default async function DashboardPage() {
                     </div>
                 </div>
                 
-                {/* --- Renderizamos el componente de cliente con los datos --- */}
                 <DashboardClient {...data} />
             </main>
         </div>
     );
 }
+

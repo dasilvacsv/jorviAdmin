@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { PurchaseDetailsModal } from '@/components/rifas/purchase-details-modal';
-import { DollarSign, ShoppingCart, Clock, CheckCircle, Trophy, BarChart2, Ticket, ChevronDown } from 'lucide-react';
+import { DollarSign, ShoppingCart, Clock, CheckCircle, Trophy, BarChart2, Ticket, ChevronDown, XCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import CountUp from 'react-countup';
@@ -23,7 +23,6 @@ type PurchaseWithTickets = {
     tickets?: { ticketNumber: string }[];
 };
 
-// Nuevo tipo para los mejores compradores
 type TopBuyer = {
     buyerName: string | null;
     buyerEmail: string;
@@ -37,11 +36,12 @@ type DashboardClientProps = {
         totalPurchases: number;
         pendingPurchases: number;
         confirmedPurchases: number;
+        rejectedPurchases: number;
     };
     revenueUsd: number;
     revenueVes: number;
     pendingPurchasesList: PurchaseWithTickets[];
-    topBuyersList: TopBuyer[]; // Prop actualizada
+    topBuyersList: TopBuyer[];
 };
 
 
@@ -62,18 +62,29 @@ const StatCard = ({ title, value, icon: Icon, isCurrency = false, currencySymbol
     </Card>
 );
 
-const PurchaseStatusChart = ({ confirmed, pending }: { confirmed: number, pending: number }) => {
-    const data = [{ name: 'Confirmadas', value: confirmed }, { name: 'Pendientes', value: pending }];
-    const COLORS = ['#10B981', '#F59E0B'];
-    if (confirmed === 0 && pending === 0) {
+const PurchaseStatusChart = ({ confirmed, pending, rejected }: { confirmed: number, pending: number, rejected: number }) => {
+    const originalData = [
+        { name: 'Confirmadas', value: confirmed },
+        { name: 'Pendientes', value: pending },
+        { name: 'Rechazadas', value: rejected }
+    ];
+    const COLORS = ['#10B981', '#F59E0B', '#EF4444']; // Verde, Ámbar, Rojo
+
+    const chartData = originalData.filter(entry => entry.value > 0);
+
+    if (chartData.length === 0) {
         return <div className="flex flex-col items-center justify-center h-40 text-center text-muted-foreground"><BarChart2 className="mx-auto h-8 w-8 mb-2" /><p>Sin datos de compras.</p></div>
     }
+    
     return (
         <ResponsiveContainer width="100%" height={160}>
             <PieChart>
                 <Tooltip contentStyle={{ background: 'hsl(var(--background) / 0.8)', backdropFilter: 'blur(4px)', borderRadius: '0.5rem', border: '1px solid hsl(var(--border))' }} />
-                <Pie data={data} innerRadius={50} outerRadius={70} fill="#8884d8" paddingAngle={5} dataKey="value" stroke="none" cornerRadius={5}>
-                    {data.map((_, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
+                <Pie data={chartData} innerRadius={50} outerRadius={70} fill="#8884d8" paddingAngle={5} dataKey="value" stroke="none" cornerRadius={5}>
+                    {chartData.map((entry) => {
+                        const originalIndex = originalData.findIndex(item => item.name === entry.name);
+                        return <Cell key={`cell-${entry.name}`} fill={COLORS[originalIndex]} />;
+                    })}
                 </Pie>
             </PieChart>
         </ResponsiveContainer>
@@ -111,11 +122,12 @@ export function DashboardClient({ stats, revenueUsd, revenueVes, pendingPurchase
 
     return (
         <motion.div className="space-y-4 md:space-y-8" initial="hidden" animate="visible" variants={containerVariants}>
-            <motion.div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4" variants={containerVariants}>
+            <motion.div className="grid gap-4 grid-cols-1 sm:grid-cols-3 lg:grid-cols-5" variants={containerVariants}>
                 <motion.div variants={itemVariants}><StatCard title="Total Compras" value={stats.totalPurchases} icon={ShoppingCart} /></motion.div>
                 <motion.div variants={itemVariants}><StatCard title="Pendientes" value={stats.pendingPurchases} icon={Clock} /></motion.div>
                 <motion.div variants={itemVariants}><StatCard title="Confirmadas" value={stats.confirmedPurchases} icon={CheckCircle} /></motion.div>
-                <motion.div variants={itemVariants}><StatCard title="Ingresos (USD)" value={revenueUsd} icon={DollarSign} isCurrency currencySymbol="$" /></motion.div>
+                <motion.div variants={itemVariants}><StatCard title="Rechazadas" value={stats.rejectedPurchases} icon={XCircle} /></motion.div>
+                <motion.div variants={itemVariants} className="sm:col-span-3 lg:col-span-1"><StatCard title="Ingresos (USD)" value={revenueUsd} icon={DollarSign} isCurrency currencySymbol="$" /></motion.div>
             </motion.div>
             <motion.div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-8" variants={containerVariants}>
                 <motion.div className="lg:col-span-2" variants={itemVariants}>
@@ -158,13 +170,16 @@ export function DashboardClient({ stats, revenueUsd, revenueVes, pendingPurchase
                         <Card>
                             <CardHeader><CardTitle>Resumen de Compras</CardTitle></CardHeader>
                             <CardContent>
-                                <PurchaseStatusChart confirmed={stats.confirmedPurchases} pending={stats.pendingPurchases} />
-                                <div className="flex justify-center gap-4 text-xs mt-2 text-muted-foreground"><div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-emerald-500"></span>Confirmadas</div><div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-amber-500"></span>Pendientes</div></div>
+                                <PurchaseStatusChart confirmed={stats.confirmedPurchases} pending={stats.pendingPurchases} rejected={stats.rejectedPurchases} />
+                                <div className="flex justify-center flex-wrap gap-4 text-xs mt-2 text-muted-foreground">
+                                  <div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-emerald-500"></span>Confirmadas</div>
+                                  <div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-amber-500"></span>Pendientes</div>
+                                  <div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-red-500"></span>Rechazadas</div>
+                                </div>
                             </CardContent>
                         </Card>
                     </motion.div>
                     
-                    {/* SECCIÓN DE TOP COMPRADORES ACTUALIZADA */}
                     <motion.div variants={itemVariants}>
                         <Card>
                             <CardHeader><CardTitle className="flex items-center gap-2"><Trophy className="h-5 w-5 text-amber-500" />Top Compradores</CardTitle></CardHeader>
