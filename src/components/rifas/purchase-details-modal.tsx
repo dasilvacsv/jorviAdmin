@@ -28,8 +28,7 @@ import { Input } from "@/components/ui/input";
 import { useFormStatus } from "react-dom";
 import {
     Check, X, Eye, Receipt, User, Mail, Phone, Ticket, DollarSign,
-    CreditCard, Hash, ImageIcon, ExternalLink, Loader2, Edit, Save, Cancel
-} from "lucide-react";
+    CreditCard, Hash, ImageIcon, ExternalLink, Loader2, Edit, Save} from "lucide-react";
 import Image from "next/image";
 import { updatePurchaseStatusAction } from "@/lib/actions";
 import { useToast } from "@/hooks/use-toast";
