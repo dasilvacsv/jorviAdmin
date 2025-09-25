@@ -15,7 +15,9 @@ import {
     Menu,
     Settings,
     ChevronsLeft, // Icono para colapsar
-    ChevronsRight, // Icono para expandir
+    ChevronsRight,
+    Users2Icon,
+    UserPlus2Icon, // Icono para expandir
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Session } from 'next-auth';
@@ -28,6 +30,7 @@ const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Rifas', href: '/rifas', icon: Gift },
     { name: 'Usuarios', href: '/usuarios', icon: Users },
+    { name: 'Referidos', href: '/referidos', icon: UserPlus2Icon },
     { name: 'Configuración', href: '/settings', icon: Settings },
 ];
 

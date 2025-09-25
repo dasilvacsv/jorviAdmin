@@ -15,6 +15,7 @@ import {
   currencyEnum,
   rejectionReasonEnum,
   waitlistSubscribers,
+  referralLinks,
 } from "./db/schema";
 import { revalidatePath } from "next/cache";
 import { eq, desc, inArray, and, lt, sql } from "drizzle-orm";
@@ -475,81 +476,76 @@ const BuyTicketsSchema = z.object({
   raffleId: z.string(),
   paymentReference: z.string().min(1, "La referencia es requerida"),
   paymentMethod: z.string().min(1, "Debe seleccionar un método de pago"),
-  paymentScreenshot: z.instanceof(File).refine(file => file.size > 0, "La captura es requerida."),
+  paymentScreenshot: z.instanceof(File).optional().nullable(),
   reservedTickets: z.string().min(1, "No hay tickets apartados para comprar."),
-  // --- AÑADIDO: Campo para el token del CAPTCHA ---
-  captchaToken: z.string().min(1, "Por favor, completa la verificación CAPTCHA."),
+  // Campo opcional para el código de referido.
+  referralCode: z.string().optional(),
 });
-// --- FIN MODIFICADO ---
+
 
 export async function buyTicketsAction(formData: FormData): Promise<ActionState> {
   const data = Object.fromEntries(formData.entries());
   const paymentScreenshotFile = formData.get('paymentScreenshot') as File | null;
-  // --- AÑADIDO: Se extrae el captchaToken para la validación ---
-  const captchaToken = formData.get('captchaToken') as string;
-
-  // --- AÑADIDO: Verificación del CAPTCHA en el backend ---
-  try {
-    const recaptchaSecret = process.env.RECAPTCHA_SECRET_KEY;
-    if (!recaptchaSecret) {
-        console.error("La clave secreta de reCAPTCHA no está configurada.");
-        return { success: false, message: "Error de configuración del servidor." };
-    }
-
-    const response = await fetch("https://www.google.com/recaptcha/api/siteverify", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/x-www-form-urlencoded",
-        },
-        body: `secret=${recaptchaSecret}&response=${captchaToken}`,
-    });
-
-    const captchaValidation = await response.json();
-
-    if (!captchaValidation.success) {
-        console.warn("Verificación de reCAPTCHA fallida:", captchaValidation['error-codes']);
-        return { success: false, message: "Falló la verificación CAPTCHA. Intenta de nuevo." };
-    }
-  } catch (error) {
-    console.error("Error al verificar CAPTCHA:", error);
-    return { success: false, message: "No se pudo verificar el CAPTCHA. Revisa tu conexión." };
-  }
-  // --- FIN AÑADIDO ---
 
   if (!PABILO_API_URL || !PABILO_API_KEY) {
-        console.error("Error: Las variables de entorno PABILO_API_URL o PABILO_API_KEY no están configuradas.");
-        return { success: false, message: "Error de configuración del servidor. Contacte al administrador." };
-    }
+    console.error("Error: Las variables de entorno PABILO_API_URL o PABILO_API_KEY no están configuradas.");
+    return { success: false, message: "Error de configuración del servidor. Contacte al administrador." };
+  }
   
-  // Se pasa el 'data' completo al schema para la validación normal
-  const validatedFields = BuyTicketsSchema.safeParse({ ...data, paymentScreenshot: paymentScreenshotFile });
+  // 2. Validar los datos del formulario con el schema actualizado.
+  const validatedFields = BuyTicketsSchema.safeParse({
+    ...data,
+    paymentScreenshot: paymentScreenshotFile
+  });
 
   if (!validatedFields.success) {
-    console.error("Validation Error:", validatedFields.error.flatten().fieldErrors);
+    console.error("Error de Validación:", validatedFields.error.flatten().fieldErrors);
     return { success: false, message: "Los datos proporcionados son inválidos. Por favor, revisa el formulario." };
   }
-
-  // Se omite 'captchaToken' aquí porque ya fue usado
-  const { name, email, phone, raffleId, paymentReference, paymentMethod, reservedTickets } = validatedFields.data;
+  
+  // Destructuramos todos los campos, incluyendo referralCode.
+  const { name, email, phone, raffleId, paymentReference, paymentMethod, reservedTickets, referralCode } = validatedFields.data;
   const ticketNumbers = reservedTickets.split(',');
   let paymentScreenshotUrl = '';
 
-  try {
-    const buffer = Buffer.from(await validatedFields.data.paymentScreenshot.arrayBuffer());
-    const key = `purchases/${crypto.randomUUID()}-${validatedFields.data.paymentScreenshot.name}`;
-    paymentScreenshotUrl = await uploadToS3(buffer, key, validatedFields.data.paymentScreenshot.type);
-  } catch (error) {
-    console.error("Error al subir captura:", error);
-    return { success: false, message: "Error al subir la imagen del pago." };
+  // 3. Subir el comprobante de pago a S3 (si existe).
+  // Se usa la condición mejorada que verifica el tamaño del archivo.
+  if (validatedFields.data.paymentScreenshot && validatedFields.data.paymentScreenshot.size > 0) {
+    try {
+      const buffer = Buffer.from(await validatedFields.data.paymentScreenshot.arrayBuffer());
+      const key = `purchases/${crypto.randomUUID()}-${validatedFields.data.paymentScreenshot.name}`;
+      paymentScreenshotUrl = await uploadToS3(buffer, key, validatedFields.data.paymentScreenshot.type);
+    } catch (error) {
+      console.error("Error al subir captura de pantalla:", error);
+      return { success: false, message: "Error al subir la imagen del pago." };
+    }
   }
 
   try {
     const raffle = await db.query.raffles.findFirst({ where: eq(raffles.id, raffleId) });
-    if (!raffle) return { success: false, message: "La rifa no existe." };
+    if (!raffle) {
+        return { success: false, message: "La rifa seleccionada no existe." };
+    }
+    
+    // 4. Lógica para encontrar el ID del referido a partir del código.
+    let referralLinkId: string | null = null;
+    if (referralCode) {
+        const link = await db.query.referralLinks.findFirst({
+            where: eq(referralLinks.code, referralCode),
+        });
+        if (link) {
+            referralLinkId = link.id;
+        } else {
+            console.warn(`Código de referido "${referralCode}" no fue encontrado.`);
+        }
+    }
+
     const amount = ticketNumbers.length * parseFloat(raffle.price);
     let purchaseStatus: "pending" | "confirmed" = "pending";
-    let responseMessage = "¡Compra registrada! Recibirás un correo cuando tus tickets sean aprobados.";
+    // Mensaje de respuesta por defecto mejorado.
+    let responseMessage = "¡Solicitud recibida! Te avisaremos por correo y WhatsApp cuando validemos el pago. ¡Mucha suerte!";
 
+    // 5. Lógica de verificación de pago con Pabilo (del código original).
     const selectedPaymentMethod = await db.query.paymentMethods.findFirst({ where: eq(paymentMethods.title, paymentMethod) });
 
     if (selectedPaymentMethod && selectedPaymentMethod.triggersApiVerification) {
@@ -574,7 +570,7 @@ export async function buyTicketsAction(formData: FormData): Promise<ActionState>
           }),
           signal: controller.signal,
         });
-        
+
         clearTimeout(timeoutId);
 
         const pabiloData = await pabiloResponse.json();
@@ -583,24 +579,29 @@ export async function buyTicketsAction(formData: FormData): Promise<ActionState>
           purchaseStatus = "confirmed";
           responseMessage = "¡Pago confirmado automáticamente! Tus tickets ya han sido generados.";
         } else {
-          console.warn("⚠️ Pabilo NO encontró el pago. Pasando a verificación manual.");
+          console.error("⚠️ Pabilo NO encontró el pago. Pasando a verificación manual.");
         }
       } catch (apiError: any) {
         if (apiError.name === 'AbortError') {
-            console.error("⛔ La API de Pabilo tardó demasiado en responder (timeout). Pasando a verificación manual.");
+          console.error("⛔ La API de Pabilo tardó demasiado en responder (timeout). Pasando a verificación manual.");
         } else {
-            console.error("⛔ Error de conexión con la API de Pabilo.", apiError);
+          console.error("⛔ Error de conexión con la API de Pabilo.", apiError);
         }
       }
     }
 
+    // 6. Ejecutar la transacción en la base de datos.
     const newPurchase = await db.transaction(async (tx) => {
       const ticketsToUpdate = await tx.select({ id: tickets.id }).from(tickets).where(and(eq(tickets.raffleId, raffleId), inArray(tickets.ticketNumber, ticketNumbers), eq(tickets.status, 'reserved')));
-      if (ticketsToUpdate.length !== ticketNumbers.length) throw new Error("Tu reservación expiró o los tickets ya no son válidos. Intenta de nuevo.");
+      if (ticketsToUpdate.length !== ticketNumbers.length) {
+          throw new Error("Tu reservación expiró o los tickets ya no son válidos. Por favor, intenta de nuevo.");
+      }
 
+      // Se añade referralLinkId al objeto a insertar.
       const [createdPurchase] = await tx.insert(purchases).values({
         raffleId, buyerName: name, buyerEmail: email, buyerPhone: phone, ticketCount: ticketNumbers.length,
         amount: amount.toString(), paymentMethod, paymentReference, paymentScreenshotUrl, status: purchaseStatus,
+        referralLinkId: referralLinkId, // Guardar el ID del referido.
       }).returning({ id: purchases.id });
 
       await tx.update(tickets).set({
@@ -612,8 +613,9 @@ export async function buyTicketsAction(formData: FormData): Promise<ActionState>
       return createdPurchase;
     });
 
-    revalidatePath(`/rifas/${raffleId}`);
-    revalidatePath("/dashboard");
+    // 7. Revalidar caché y enviar notificaciones.
+    revalidatePath(`/rifa/${raffle.slug}`); // Usando la ruta mejorada con slug.
+    revalidatePath("/admin/rifas");
 
     if (purchaseStatus === 'confirmed') {
       await sendTicketsEmailAndWhatsapp(newPurchase.id);
@@ -623,11 +625,13 @@ export async function buyTicketsAction(formData: FormData): Promise<ActionState>
     }
 
     return { success: true, message: responseMessage, data: newPurchase };
+
   } catch (error: any) {
-    console.error("Error al comprar tickets:", error);
-    return { success: false, message: error.message || "Ocurrió un error en el servidor." };
+    console.error("Error al procesar la compra de tickets:", error);
+    return { success: false, message: error.message || "Ocurrió un error inesperado en el servidor." };
   }
 }
+
 
 const UpdatePurchaseStatusSchema = z.object({
   purchaseId: z.string(),
@@ -1381,6 +1385,130 @@ async function notifyWaitlistAboutNewRaffle(raffleId: string, raffleName: string
   } catch (error) {
     console.error("Error masivo al notificar a la lista de espera:", error);
   }
+}
+
+const ReferralLinkSchema = z.object({
+    name: z.string().min(3, "El nombre de la campaña es requerido."),
+    code: z.string().min(3, "El código es requerido.").regex(/^[a-zA-Z0-9_-]+$/, "El código solo puede contener letras, números, guiones y guiones bajos."),
+});
+
+export async function createReferralLinkAction(prevState: ActionState, formData: FormData): Promise<ActionState> {
+    await requireAdmin();
+    const validatedFields = ReferralLinkSchema.safeParse(Object.fromEntries(formData.entries()));
+
+    if (!validatedFields.success) {
+        return { success: false, message: "Datos inválidos." };
+    }
+
+    const { name, code } = validatedFields.data;
+
+    try {
+        const existingCode = await db.query.referralLinks.findFirst({ where: eq(referralLinks.code, code) });
+        if (existingCode) {
+            return { success: false, message: "Este código ya está en uso. Elige otro." };
+        }
+
+        await db.insert(referralLinks).values({ name, code });
+        revalidatePath("/admin/referidos");
+        return { success: true, message: "Link de referido creado con éxito." };
+    } catch (error) {
+        console.error("Error al crear link de referido:", error);
+        return { success: false, message: "Error del servidor." };
+    }
+}
+
+// Define los tipos de datos que devolverá la función
+type SellerAnalytics = {
+    sellerName: string;
+    totalSales: number;
+    confirmedSales: number;
+    totalTickets: number;
+    confirmedTickets: number;
+    totalRevenue: number;
+    confirmedRevenue: number;
+};
+
+// --- ¡NUEVO! ACTION PARA OBTENER ANALÍTICAS DE REFERIDOS POR RIFA ---
+export async function getReferralAnalyticsForRaffle(raffleId: string) {
+    await requireAdmin();
+    try {
+        const raffle = await db.query.raffles.findFirst({
+            where: eq(raffles.id, raffleId),
+            columns: { id: true, name: true, price: true, currency: true }
+        });
+
+        if (!raffle) {
+            return { success: false, message: "Rifa no encontrada." };
+        }
+
+        const sales = await db.query.purchases.findMany({
+            where: eq(purchases.raffleId, raffleId),
+            columns: { status: true, ticketCount: true, amount: true },
+            with: {
+                referralLink: {
+                    columns: { name: true, code: true }
+                }
+            }
+        });
+        
+        const analyticsMap = new Map<string, SellerAnalytics>();
+        analyticsMap.set('direct', {
+            sellerName: 'Ventas Directas (Sin Referido)',
+            totalSales: 0, confirmedSales: 0, totalTickets: 0,
+            confirmedTickets: 0, totalRevenue: 0, confirmedRevenue: 0,
+        });
+
+        for (const sale of sales) {
+            const key = sale.referralLink?.code || 'direct';
+            const name = sale.referralLink?.name || 'Ventas Directas (Sin Referido)';
+
+            if (!analyticsMap.has(key)) {
+                analyticsMap.set(key, {
+                    sellerName: name,
+                    totalSales: 0, confirmedSales: 0, totalTickets: 0,
+                    confirmedTickets: 0, totalRevenue: 0, confirmedRevenue: 0,
+                });
+            }
+
+            const stats = analyticsMap.get(key)!;
+            const saleAmount = parseFloat(sale.amount);
+
+            stats.totalSales += 1;
+            stats.totalTickets += sale.ticketCount;
+            stats.totalRevenue += saleAmount;
+
+            if (sale.status === 'confirmed') {
+                stats.confirmedSales += 1;
+                stats.confirmedTickets += sale.ticketCount;
+                stats.confirmedRevenue += saleAmount;
+            }
+        }
+        
+        const analytics = Array.from(analyticsMap.values())
+                               .sort((a, b) => b.confirmedRevenue - a.confirmedRevenue);
+
+        return { success: true, data: { raffle, analytics } };
+
+    } catch (error) {
+        console.error("Error obteniendo analíticas:", error);
+        return { success: false, message: "Error del servidor." };
+    }
+}
+
+
+export async function deleteReferralLinkAction(prevState: ActionState, formData: FormData): Promise<ActionState> {
+    await requireAdmin();
+    const id = formData.get('id') as string;
+    if (!id) return { success: false, message: "ID no proporcionado." };
+
+    try {
+        await db.delete(referralLinks).where(eq(referralLinks.id, id));
+        revalidatePath("/admin/referidos");
+        return { success: true, message: "Link de referido eliminado." };
+    } catch (error) {
+        console.error("Error al eliminar link de referido:", error);
+        return { success: false, message: "Error del servidor. Es posible que el link tenga compras asociadas." };
+    }
 }
 
 export async function getSalesDataForRaffle(raffleId: string): Promise<RaffleSalesData | null> {

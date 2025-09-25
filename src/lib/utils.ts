@@ -23,7 +23,7 @@ export function formatDateTime(date: Date | string) {
   })
 }
 
-export function formatCurrency(amount: string | number) {
+export function formatCurrency(amount: string | number, currency: any) {
   return new Intl.NumberFormat('es-VE', {
     style: 'currency',
     currency: 'USD',

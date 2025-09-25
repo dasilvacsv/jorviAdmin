@@ -27,6 +27,14 @@ export const rejectionReasonEnum = pgEnum("rejection_reason", ["invalid_payment"
 // TABLAS PRINCIPALES
 // ----------------------------------------------------------------
 
+// --- ¡NUEVO! Tabla para Links de Referidos ---
+export const referralLinks = pgTable("referral_links", {
+    id: text("id").primaryKey().$defaultFn(() => createId()),
+    name: varchar("name", { length: 256 }).notNull(), // ej: "Campaña Meta Septiembre"
+    code: varchar("code", { length: 50 }).notNull().unique(), // ej: "META_SEP25"
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const users = pgTable("users", {
     id: text("id").primaryKey().$defaultFn(() => createId()),
     name: varchar("name", { length: 256 }),
@@ -65,6 +73,8 @@ export const purchases = pgTable("purchases", {
   paymentMethod: varchar("payment_method", { length: 256 }),
   ticketCount: integer("ticket_count").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  // --- ¡NUEVO! Campo para asociar la compra con un link de referido ---
+    referralLinkId: text("referral_link_id").references(() => referralLinks.id, { onDelete: "set null" }),
   raffleId: text("raffle_id").notNull().references(() => raffles.id, { onDelete: "cascade" }),
   rejectionReason: rejectionReasonEnum("rejection_reason"),
   rejectionComment: text("rejection_comment"),
@@ -160,13 +170,25 @@ export const raffleRelations = relations(raffles, ({ many, one }) => ({
   }),
 }));
 
-export const purchaseRelations = relations(purchases, ({ one, many }) => ({
-  raffle: one(raffles, {
-    fields: [purchases.raffleId],
-    references: [raffles.id],
-  }),
-  tickets: many(tickets),
+// --- ¡NUEVO! Relaciones para la tabla de referidos ---
+export const referralLinkRelations = relations(referralLinks, ({ many }) => ({
+    purchases: many(purchases),
 }));
+
+// --- MODIFICADO: Añadir relación en purchases ---
+export const purchaseRelations = relations(purchases, ({ one, many }) => ({
+    raffle: one(raffles, {
+        fields: [purchases.raffleId],
+        references: [raffles.id],
+    }),
+    tickets: many(tickets),
+    // --- ¡NUEVO! ---
+    referralLink: one(referralLinks, {
+        fields: [purchases.referralLinkId],
+        references: [referralLinks.id],
+    }),
+}));
+
 
 export const ticketRelations = relations(tickets, ({ one }) => ({
   raffle: one(raffles, {

@@ -78,6 +78,13 @@
       "when": 1758218615688,
       "tag": "0010_regular_mentor",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1758771091755,
+      "tag": "0011_regular_lilith",
+      "breakpoints": true
     }
   ]
 }
