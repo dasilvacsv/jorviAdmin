@@ -270,7 +270,7 @@ export function RaffleDetailView({ initialRaffle, topBuyers }: { initialRaffle: 
                                         {/* ✅ 5. Botón agregado para ir al analytics */}
                                         <Link href={`/rifas/${raffle.id}/analytics`} passHref>
                                             <Button variant="outline" className="w-full sm:w-auto flex-shrink-0">
-                                                <LayoutGrid className="mr-2 h-4 w-4"/> Ver Analísis por Referido (Bingo)
+                                                <LayoutGrid className="mr-2 h-4 w-4"/> Referidos
                                             </Button>
                                         </Link>
                                         <Link href={`/rifas/${raffle.id}/ventas`} passHref>
