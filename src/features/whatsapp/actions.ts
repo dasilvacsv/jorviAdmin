@@ -21,9 +21,20 @@ type SendMessageResponse = {
 }
 
 const formatPhoneNumber = (phone: string): string => {
-  // El número ya viene con el prefijo de país desde el frontend.
-  // La única tarea es limpiar cualquier caracter que no sea un dígito.
-  return phone.replace(/\D/g, '');
+  // 1. Limpia cualquier caracter que no sea un dígito (espacios, +, -).
+  const cleanPhone = phone.replace(/\D/g, '');
+
+  // 2. Lógica específica para corregir números móviles de Perú (código de país 51).
+  //    Un número móvil peruano sin el '9' obligatorio tendría 10 dígitos (51 + 8 dígitos).
+  if (cleanPhone.startsWith('51') && cleanPhone.length === 10) {
+    // 3. Si cumple la condición, reconstruye el número agregando el '9'.
+    //    Ejemplo: '5112345678' se convierte en '51912345678'.
+    return `519${cleanPhone.substring(2)}`;
+  }
+
+  // 4. Para cualquier otro caso (números de otros países o números peruanos ya correctos),
+  //    devuelve el número limpio sin modificaciones.
+  return cleanPhone;
 };
 
 export async function sendWhatsappMessage(
