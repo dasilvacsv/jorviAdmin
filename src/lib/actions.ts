@@ -1723,3 +1723,63 @@ export async function updatePurchaseInfoAction(
     return { success: false, message: "Error al actualizar la información." };
   }
 }
+
+// ✅ --- INICIO: NUEVA ACCIÓN PARA REENVIAR NOTIFICACIONES ---
+
+const ResendTicketsSchema = z.object({
+  purchaseId: z.string().min(1, "ID de compra es requerido."),
+});
+
+/**
+ * Reenvía el correo y el WhatsApp con los tickets a un comprador de una compra ya confirmada.
+ * Acción protegida solo para administradores.
+ */
+export async function resendTicketsNotificationAction(
+  prevState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  try {
+    // 1. Seguridad: Solo un administrador puede ejecutar esta acción.
+    await requireAdmin();
+
+    // 2. Validar el ID de la compra que viene del formulario.
+    const validatedFields = ResendTicketsSchema.safeParse(
+      Object.fromEntries(formData.entries())
+    );
+    if (!validatedFields.success) {
+      return { success: false, message: "ID de compra inválido." };
+    }
+    const { purchaseId } = validatedFields.data;
+
+    // 3. Verificar que la compra exista y esté confirmada.
+    const purchase = await db.query.purchases.findFirst({
+      where: eq(purchases.id, purchaseId),
+      columns: { status: true },
+    });
+
+    if (!purchase) {
+      return { success: false, message: "La compra no fue encontrada." };
+    }
+
+    if (purchase.status !== "confirmed") {
+      return {
+        success: false,
+        message: "Solo se pueden reenviar notificaciones de compras confirmadas.",
+      };
+    }
+
+    // 4. Si todo es correcto, llamar a la función existente para enviar los mensajes.
+    await sendTicketsEmailAndWhatsapp(purchaseId);
+
+    // 5. Devolver una respuesta exitosa.
+    return { success: true, message: "Notificaciones reenviadas con éxito." };
+  } catch (error: any) {
+    console.error("Error al reenviar notificaciones:", error);
+    return {
+      success: false,
+      message: error.message || "Ocurrió un error en el servidor.",
+    };
+  }
+}
+
+// ✅ --- FIN: NUEVA ACCIÓN ---

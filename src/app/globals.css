@@ -67,18 +67,24 @@
     -moz-osx-font-smoothing: grayscale;
   }
   
-  /* --- Scrollbar personalizado para el tema oscuro "Premium Amber" --- */
+  /* --- Scrollbar Personalizado y Adaptable --- */
+  /* Para navegadores basados en WebKit (Chrome, Safari, Edge) */
   ::-webkit-scrollbar {
-    @apply w-2;
+    width: 8px; /* Ancho de la barra */
+    height: 8px; /* Altura para scroll horizontal */
   }
+  
   ::-webkit-scrollbar-track {
-    @apply bg-zinc-950;
+    background-color: hsl(var(--background)); /* Fondo de la pista */
   }
+  
   ::-webkit-scrollbar-thumb {
-    @apply bg-zinc-800 rounded-full border-2 border-zinc-950;
+    background-color: hsl(var(--border)); /* Color del pulgar */
+    border-radius: 9999px; /* Bordes redondeados */
   }
+  
   ::-webkit-scrollbar-thumb:hover {
-    @apply bg-zinc-700;
+    background-color: hsl(var(--primary)); /* Color al pasar el ratón por encima */
   }
 }
 

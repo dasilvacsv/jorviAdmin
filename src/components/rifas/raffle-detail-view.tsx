@@ -6,8 +6,8 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-// ✅ 1. Se importa el nuevo ícono
-import { ArrowLeft, Users, DollarSign, Ticket, Crown, Loader2, Edit, Calendar as CalendarIcon, AlertCircle, AlertTriangle, Search, Star, ChevronDown, Phone, MessageSquare, BarChart2, Info, ListChecks, Award, LayoutGrid } from 'lucide-react';
+// ✅ 1. Se importa el ícono 'Send' para el botón y useFormStatus
+import { ArrowLeft, Users, DollarSign, Ticket, Crown, Loader2, Edit, Calendar as CalendarIcon, AlertCircle, AlertTriangle, Search, Star, ChevronDown, Phone, MessageSquare, BarChart2, Info, ListChecks, Award, LayoutGrid, Send } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { ImageCarousel } from './image-carousel';
@@ -15,8 +15,9 @@ import { StatusActions } from './status-actions';
 import { EditRaffleForm } from './edit-raffle-form';
 import { PurchaseDetailsModal } from './purchase-details-modal';
 import { Button } from '@/components/ui/button';
-import { drawWinnerAction, postponeRaffleAction } from '@/lib/actions';
-import { useFormState } from 'react-dom';
+// ✅ 2. Se importa la nueva server action
+import { drawWinnerAction, postponeRaffleAction, resendTicketsNotificationAction } from '@/lib/actions';
+import { useFormState, useFormStatus } from 'react-dom'; // ✅ Se importa useFormStatus
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -53,11 +54,53 @@ import {
 type WinnerTicket={id:string;ticketNumber:string;purchase:{buyerName:string|null;buyerEmail:string;buyerPhone:string|null;}|null;};type Purchase={id:string;status:'pending'|'confirmed'|'rejected';buyerName:string|null;buyerEmail:string;ticketCount:number;amount:string;createdAt:Date;};type RaffleTicket={id:string;ticketNumber:string;status:'available'|'reserved'|'sold';purchaseId:string|null;};type RaffleWithRelations={id:string;name:string;description:string|null;price:string;currency:'USD'|'VES';minimumTickets:number;status:"active"|"finished"|"cancelled"|"draft"|"postponed";createdAt:Date;updatedAt:Date;limitDate:Date;winnerTicketId:string|null;winnerLotteryNumber:string|null;winnerProofUrl:string|null;winnerTicket?:WinnerTicket|null;images:{id:string;url:string;}[];purchases:Purchase[];tickets:RaffleTicket[];};type UnifiedTicketInfo={id:string;ticketNumber:string;ticketStatus:'available'|'reserved'|'sold';buyerName:string|null;buyerEmail:string|null;purchaseStatus:'pending'|'confirmed'|'rejected'|null;purchase:Purchase|null;};type PurchaseWithTickets=Purchase&{ticketNumbers:string[];};type TopBuyer={buyerName:string|null;buyerEmail:string;totalTickets:number;};
 
 
-// --- FUNCIONES Y COMPONENTES AUXILIARES (Sin cambios) ---
+// --- FUNCIONES Y COMPONENTES AUXILIARES ---
 const getStatusBadge=(status:string|null)=>{switch(status){case'confirmed':return<Badge className="bg-green-100 text-green-800">Confirmado</Badge>;case'pending':return<Badge className="bg-yellow-100 text-yellow-800">Pendiente</Badge>;case'rejected':return<Badge className="bg-red-100 text-red-800">Rechazado</Badge>;default:return null;}};
 const getRaffleStatusBadge=(status:string)=>{switch(status){case'active':return<Badge className="bg-green-100 text-green-800 border-green-300">Activa</Badge>;case'finished':return<Badge className="bg-blue-100 text-blue-800 border-blue-300">Finalizada</Badge>;case'cancelled':return<Badge className="bg-red-100 text-red-800 border-red-300">Cancelada</Badge>;case'draft':return<Badge className="bg-gray-100 text-gray-800 border-gray-300">Borrador</Badge>;case'postponed':return<Badge className="bg-yellow-100 text-yellow-800 border-yellow-300">Pospuesta</Badge>;default:return<Badge variant="secondary">{status}</Badge>;}};
 function DrawWinnerForm({raffleId}:{raffleId:string}){const[state,formAction]=useFormState(drawWinnerAction,{success:false,message:""});const[isPending,setIsPending]=useState(false);const[showPostpone,setShowPostpone]=useState(false);useEffect(()=>{if(state.message&&!state.success&&state.message.includes("no fue vendido o no existe")){setShowPostpone(true);}},[state]);const handleSubmit=async(event:React.FormEvent<HTMLFormElement>)=>{event.preventDefault();setIsPending(true);const formData=new FormData(event.currentTarget);await formAction(formData);setIsPending(false);};return(<><CardTitle className="flex items-center gap-2 text-blue-600 !mt-0 !mb-2"><Crown className="h-5 w-5"/>{showPostpone?'Posponer Rifa':'Registrar Ganador'}</CardTitle><CardDescription className="mb-4">{showPostpone?'El número ganador no fue vendido. Debes elegir una nueva fecha y hora para el sorteo.':'Ingresa el número ganador de la lotería y la imagen de prueba.'}</CardDescription>{showPostpone?(<PostponeRaffleForm raffleId={raffleId}/>):(<>{state.message&&!state.success&&(<Alert variant="destructive" className="mb-4"><AlertCircle className="h-4 w-4"/><AlertDescription>{state.message}</AlertDescription></Alert>)}<form onSubmit={handleSubmit} className="space-y-4"><input type="hidden" name="raffleId" value={raffleId}/><div><Label htmlFor="lotteryNumber">Número Ganador (4 dígitos)</Label><Input id="lotteryNumber" name="lotteryNumber" required maxLength={4} pattern="\d{4}" placeholder="Ej: 2444" className="mt-1"/></div><div><Label htmlFor="winnerProof">Prueba del Sorteo (Imagen)</Label><Input id="winnerProof" name="winnerProof" type="file" required accept="image/*" className="mt-1"/></div><Button type="submit" className="w-full" disabled={isPending}>{isPending&&<Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Confirmar Ganador</Button></form></>)}</>);}
 function PostponeRaffleForm({raffleId}:{raffleId:string}){const[state,formAction]=useFormState(postponeRaffleAction,{success:false,message:""});const[date,setDate]=useState<Date|undefined>();const[hour,setHour]=useState('19');const[minute,setMinute]=useState('00');const[combinedDateTime,setCombinedDateTime]=useState<Date|null>(null);useEffect(()=>{if(date){const newDateTime=new Date(date);const validHour=Math.max(0,Math.min(23,parseInt(hour,10)||0));const validMinute=Math.max(0,Math.min(59,parseInt(minute,10)||0));newDateTime.setHours(validHour,validMinute,0,0);setCombinedDateTime(newDateTime);}},[date,hour,minute]);return(<div className="pt-2">{state.message&&(<Alert variant={state.success?"default":"destructive"} className="mb-4"><AlertDescription>{state.message}</AlertDescription></Alert>)}<form action={formAction} className="space-y-4"><input type="hidden" name="raffleId" value={raffleId}/><input type="hidden" name="newLimitDate" value={combinedDateTime?.toISOString()||''}/><div><Label className='mb-2 block'>Nueva Fecha</Label><Popover><PopoverTrigger asChild><Button variant={"outline"} className={cn("w-full justify-start text-left font-normal",!date&&"text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4"/>{date?format(date,"PPP",{locale:es}):<span>Selecciona una fecha</span>}</Button></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={date} onSelect={setDate} initialFocus disabled={(day)=>day<new Date(new Date().setDate(new Date().getDate()-1))}/></PopoverContent></Popover></div><div className="grid grid-cols-2 gap-2"><div><Label htmlFor="hour">Hora (24h)</Label><Input id="hour" type="number" value={hour} onChange={(e)=>setHour(e.target.value)} min="0" max="23"/></div><div><Label htmlFor="minute">Minutos</Label><Input id="minute" type="number" value={minute} onChange={(e)=>setMinute(e.target.value)} min="0" max="59"/></div></div><Button type="submit" variant="outline" className="w-full" disabled={!combinedDateTime}>Confirmar Posposición</Button></form></div>);}
+
+
+// ✅ --- INICIO: NUEVO COMPONENTE PARA EL BOTÓN DE REENVÍO ---
+
+// Componente hijo para mostrar el estado de carga (pending)
+function ResendSubmitButton() {
+    const { pending } = useFormStatus();
+    return (
+        <Button
+            type="submit"
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 p-0 text-blue-600 hover:text-blue-800"
+            disabled={pending}
+            aria-label="Reenviar notificación"
+        >
+            {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+        </Button>
+    );
+}
+
+// Componente principal del formulario de reenvío
+function ResendNotificationButton({ purchaseId }: { purchaseId: string }) {
+    const [state, formAction] = useFormState(resendTicketsNotificationAction, { success: false, message: "" });
+
+    useEffect(() => {
+        // Opcional: Mostrar un toast o alerta con el resultado
+        if (state.message) {
+            // Reemplaza esto con tu librería de notificaciones (p. ej. react-hot-toast, sonner)
+            alert(state.message);
+        }
+    }, [state]);
+
+    return (
+        <form action={formAction}>
+            <input type="hidden" name="purchaseId" value={purchaseId} />
+            <ResendSubmitButton />
+        </form>
+    );
+}
+// ✅ --- FIN: NUEVO COMPONENTE ---
+
 
 // --- TABLA DE TICKETS (Sin cambios) ---
 const unifiedColumns: ColumnDef<UnifiedTicketInfo>[] = [
@@ -149,7 +192,7 @@ function UnifiedDataTable({ data }: { data: UnifiedTicketInfo[] }) {
     );
 }
 
-// --- TABLA DE VENTAS (Sin cambios) ---
+// --- TABLA DE VENTAS (MODIFICADA) ---
 const salesColumns: ColumnDef<PurchaseWithTickets>[] = [
     {
         accessorKey: "buyerName", header: "Comprador", cell: ({ row }) => {
@@ -159,7 +202,24 @@ const salesColumns: ColumnDef<PurchaseWithTickets>[] = [
     },
     { accessorKey: "status", header: "Estado", cell: ({ row }) => getStatusBadge(row.getValue("status"))},
     { accessorKey: "ticketCount", header: "Tickets", cell: ({ row }) => <div className="font-medium">{row.getValue("ticketCount")}</div> },
-    { id: "actions", header: "Acciones", cell: ({ row }) => <PurchaseDetailsModal purchase={row.original as any}/> },
+    // ✅ --- INICIO: COLUMNA DE ACCIONES MODIFICADA ---
+    {
+        id: "actions",
+        header: () => <div className="text-right">Acciones</div>, // Alinea el título a la derecha
+        cell: ({ row }) => {
+            const purchase = row.original;
+            return (
+                <div className="flex items-center justify-end gap-1">
+                    {/* El botón de reenviar solo aparece si la compra está confirmada */}
+                    {purchase.status === 'confirmed' && (
+                        <ResendNotificationButton purchaseId={purchase.id} />
+                    )}
+                    <PurchaseDetailsModal purchase={purchase as any} />
+                </div>
+            );
+        },
+    },
+    // ✅ --- FIN: COLUMNA DE ACCIONES MODIFICADA ---
 ];
 function SalesDataTable({ data }: { data: PurchaseWithTickets[] }) {
     const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
@@ -186,14 +246,14 @@ function SalesDataTable({ data }: { data: PurchaseWithTickets[] }) {
             <div>
                 <Table>
                     <TableHeader>
-                         {table.getHeaderGroups().map(hg => (
+                        {table.getHeaderGroups().map(hg => (
                             <TableRow key={hg.id} className="hidden md:table-row">
                                 {hg.headers.map(h => (
                                     <TableHead key={h.id} className={cn(
                                         h.id === 'status' && 'w-[130px]',
                                         h.id === 'ticketCount' && 'w-[100px] text-center',
-                                        h.id === 'ticketNumbers' && 'w-[140px]',
-                                        h.id === 'actions' && 'w-[120px] text-right',
+                                        // ✅ Se ajusta el ancho de la columna de acciones
+                                        h.id === 'actions' && 'w-[100px] text-right',
                                     )}>
                                         {flexRender(h.column.columnDef.header, h.getContext())}
                                     </TableHead>
@@ -226,7 +286,7 @@ function SalesDataTable({ data }: { data: PurchaseWithTickets[] }) {
     );
 }
 
-// --- COMPONENTE PRINCIPAL (MODIFICADO) ---
+// --- COMPONENTE PRINCIPAL (Sin cambios en su lógica) ---
 export function RaffleDetailView({ initialRaffle, topBuyers }: { initialRaffle: RaffleWithRelations; topBuyers: TopBuyer[]; }) {
     const [isEditing, setIsEditing] =useState(false); const raffle = initialRaffle;
     const isDrawDay = new Date(raffle.limitDate) <= new Date() && raffle.status === 'active';
@@ -256,18 +316,14 @@ export function RaffleDetailView({ initialRaffle, topBuyers }: { initialRaffle: 
                                 <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
                                     <div>
                                         <CardTitle className="flex items-center gap-2 text-xl"><ListChecks className="h-6 w-6"/> Gestión de Participantes</CardTitle>
-                                        {/* ✅ 2. Descripción actualizada */}
                                         <CardDescription className="mt-1">Visualiza los datos por tickets, ventas o en el tablero interactivo.</CardDescription>
                                     </div>
-                                    {/* ✅ 3. Contenedor para alinear los botones */}
                                     <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                                        {/* ✅ 4. Botón agregado para ir al Bingo */}
                                         <Link href={`/rifas/${raffle.id}/bingo`} passHref>
                                             <Button variant="outline" className="w-full sm:w-auto flex-shrink-0">
                                                 <LayoutGrid className="mr-2 h-4 w-4"/> Ver Tablero (Bingo)
                                             </Button>
                                         </Link>
-                                        {/* ✅ 5. Botón agregado para ir al analytics */}
                                         <Link href={`/rifas/${raffle.id}/analytics`} passHref>
                                             <Button variant="outline" className="w-full sm:w-auto flex-shrink-0">
                                                 <LayoutGrid className="mr-2 h-4 w-4"/> Referidos
