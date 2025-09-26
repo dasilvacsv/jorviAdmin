@@ -1,3 +1,4 @@
+// components/admin/PurchaseDetailsModal.tsx
 "use client";
 
 import { useState, useEffect } from "react";
@@ -28,16 +29,15 @@ import { Input } from "@/components/ui/input";
 import { useFormStatus } from "react-dom";
 import {
     Check, X, Eye, Receipt, User, Mail, Phone, Ticket, DollarSign,
-    CreditCard, Hash, ImageIcon, ExternalLink, Loader2, Edit, Save} from "lucide-react";
+    CreditCard, Hash, ImageIcon, ExternalLink, Loader2, Edit, Save
+} from "lucide-react";
 import Image from "next/image";
-import { updatePurchaseStatusAction } from "@/lib/actions";
+import { updatePurchaseStatusAction, updatePurchaseInfoAction } from "@/lib/actions";
 import { useToast } from "@/hooks/use-toast";
 import { useFormState } from "react-dom";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
-// Se elimina Tooltip ya que no se usará
-// import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface Purchase {
     id: string;
@@ -73,17 +73,17 @@ function SubmitButton({ children, newStatus, disabled }: { children: React.React
     );
 }
 
-function EditableInfoDetail({ 
-    icon, 
-    label, 
-    value, 
-    onSave, 
+function EditableInfoDetail({
+    icon,
+    label,
+    value,
+    onSave,
     type = "text",
-    editable = false 
-}: { 
-    icon: React.ElementType, 
-    label: string, 
-    value: React.ReactNode, 
+    editable = false
+}: {
+    icon: React.ElementType,
+    label: string,
+    value: React.ReactNode,
     onSave?: (newValue: string) => void,
     type?: "text" | "email" | "tel",
     editable?: boolean
@@ -133,9 +133,9 @@ function EditableInfoDetail({
                             {value || <span className="italic text-slate-400">N/A</span>}
                         </span>
                         {editable && (
-                            <Button 
-                                size="sm" 
-                                variant="ghost" 
+                            <Button
+                                size="sm"
+                                variant="ghost"
                                 onClick={() => setIsEditing(true)}
                                 className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
                             >
@@ -169,7 +169,7 @@ export function PurchaseDetailsModal({ purchase, raffleCurrency = 'USD' }: Purch
     const [rejectionDialogOpen, setRejectionDialogOpen] = useState(false);
     const [rejectionReason, setRejectionReason] = useState<'invalid_payment' | 'malicious' | ''>('');
     const [rejectionComment, setRejectionComment] = useState('');
-    
+
     const [purchaseData, setPurchaseData] = useState(purchase);
 
     const [state, formAction] = useFormState(updatePurchaseStatusAction, { success: false, message: "" });
@@ -192,34 +192,46 @@ export function PurchaseDetailsModal({ purchase, raffleCurrency = 'USD' }: Purch
     }, [state, toast]);
 
     const handleEmailChange = async (newEmail: string) => {
-        try {
+        const formData = new FormData();
+        formData.append('purchaseId', purchaseData.id);
+        formData.append('buyerEmail', newEmail);
+
+        const result = await updatePurchaseInfoAction({ success: false, message: '' }, formData);
+
+        if (result.success) {
             setPurchaseData(prev => ({ ...prev, buyerEmail: newEmail }));
             toast({
                 title: "Éxito",
-                description: "Email actualizado correctamente",
+                description: "Email actualizado correctamente.",
                 variant: "default",
             });
-        } catch (error) {
+        } else {
             toast({
                 title: "Error",
-                description: "No se pudo actualizar el email",
+                description: result.message || "No se pudo actualizar el email.",
                 variant: "destructive",
             });
         }
     };
 
     const handlePhoneChange = async (newPhone: string) => {
-        try {
+        const formData = new FormData();
+        formData.append('purchaseId', purchaseData.id);
+        formData.append('buyerPhone', newPhone);
+
+        const result = await updatePurchaseInfoAction({ success: false, message: '' }, formData);
+
+        if (result.success) {
             setPurchaseData(prev => ({ ...prev, buyerPhone: newPhone }));
             toast({
                 title: "Éxito",
-                description: "Teléfono actualizado correctamente",
+                description: "Teléfono actualizado correctamente.",
                 variant: "default",
             });
-        } catch (error) {
+        } else {
             toast({
                 title: "Error",
-                description: "No se pudo actualizar el teléfono",
+                description: result.message || "No se pudo actualizar el teléfono.",
                 variant: "destructive",
             });
         }
@@ -231,10 +243,6 @@ export function PurchaseDetailsModal({ purchase, raffleCurrency = 'USD' }: Purch
     };
 
     const isRejectButtonDisabled = !rejectionReason || (rejectionReason === 'malicious' && rejectionComment.trim() === '');
-    
-    // ✅ CAMBIO PRINCIPAL: Se elimina la validación del comprobante.
-    // El botón de confirmar ahora siempre estará habilitado.
-    const canBeConfirmed = true; 
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>
@@ -260,17 +268,17 @@ export function PurchaseDetailsModal({ purchase, raffleCurrency = 'USD' }: Purch
                             </CardHeader>
                             <CardContent className="space-y-1">
                                 <CompactInfoDetail icon={User} label="Nombre" value={purchaseData.buyerName} />
-                                <EditableInfoDetail 
-                                    icon={Mail} 
-                                    label="Email" 
+                                <EditableInfoDetail
+                                    icon={Mail}
+                                    label="Email"
                                     value={purchaseData.buyerEmail}
                                     type="email"
                                     onSave={handleEmailChange}
                                     editable={true}
                                 />
-                                <EditableInfoDetail 
-                                    icon={Phone} 
-                                    label="Teléfono" 
+                                <EditableInfoDetail
+                                    icon={Phone}
+                                    label="Teléfono"
                                     value={purchaseData.buyerPhone || ''}
                                     type="tel"
                                     onSave={handlePhoneChange}
@@ -361,7 +369,6 @@ export function PurchaseDetailsModal({ purchase, raffleCurrency = 'USD' }: Purch
                                 </DialogContent>
                             </Dialog>
 
-                            {/* ✅ CAMBIO: Se elimina el Tooltip y la propiedad 'disabled' del botón */}
                             <AlertDialog>
                                 <AlertDialogTrigger asChild>
                                     <Button type="button" className="w-full bg-orange-500 hover:bg-orange-600 text-white">
