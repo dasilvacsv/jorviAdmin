@@ -376,8 +376,6 @@ export function PaymentMethodDialog({
                 />
               )
           )}
-          {/* La carga real del archivo se debe manejar en la server action */}
-          <input type="file" name="icon" className="hidden" />
 
           {/* --- SECCIÓN GENERAL --- */}
           <div className="space-y-4">
