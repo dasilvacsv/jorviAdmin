@@ -1,5 +1,10 @@
 // lib/types.ts
 
+// Tipo para el link de referido, puede ser nulo si la venta es directa
+type ReferralLink = {
+  name: string;
+} | null;
+
 // Tipos extraídos de tu schema para claridad
 type Raffle = {
   id: string;
@@ -25,12 +30,17 @@ type Purchase = {
   ticketCount: number;
   createdAt: Date;
   raffleId: string;
+  // --- CAMPOS AÑADIDOS ---
+  rejectionReason: 'invalid_payment' | 'malicious' | null;
+  rejectionComment: string | null;
 };
 
 // Tipo combinado que usará nuestro módulo de ventas
 export type PurchaseWithTicketsAndRaffle = Purchase & {
   tickets: Ticket[];
   raffle: Raffle;
+  // --- RELACIÓN AÑADIDA ---
+  referralLink: ReferralLink;
 };
 
 export type RaffleSalesData = {

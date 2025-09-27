@@ -91,23 +91,24 @@ const styles = StyleSheet.create({
     tableRow: {
         flexDirection: 'row',
         borderBottom: '1px solid #e5e7eb',
-        minHeight: 18,
+        paddingVertical: 2, // Añadido para dar espacio a la razón del rechazo
         alignItems: 'center'
     },
     tableCell: {
-        padding: 4,
+        paddingHorizontal: 4,
     },
     // --- Colores para los estados ---
-    statusConfirmed: { color: '#16a34a' },
-    statusPending: { color: '#f59e0b' },
-    statusRejected: { color: '#dc2626' },
-    // --- Anchos de las Columnas ---
-    colComprador: { width: '25%' },
-    colFecha: { width: '20%' },
-    colStatus: { width: '15%', textAlign: 'center' },
-    colTickets: { width: '10%', textAlign: 'center' },
+    statusConfirmed: { color: '#16a34a', fontWeight: 'bold' },
+    statusPending: { color: '#f59e0b', fontWeight: 'bold' },
+    statusRejected: { color: '#dc2626', fontWeight: 'bold' },
+    // ✅ --- Anchos de las Columnas (REAJUSTADOS) ---
+    colComprador: { width: '22%' },
+    colFecha: { width: '18%' },
+    colOrigen: { width: '15%' }, // Nueva columna
+    colStatus: { width: '12%', textAlign: 'center' },
+    colTickets: { width: '8%', textAlign: 'center' },
     colMonto: { width: '15%', textAlign: 'right' },
-    colMetodo: { width: '15%', textAlign: 'center'},
+    colMetodo: { width: '10%', textAlign: 'center' },
     // --- Footer ---
     footer: {
         position: 'absolute',
@@ -139,6 +140,13 @@ const formatStatus = (status: string) => {
     return status;
 }
 
+// ✅ --- NUEVO HELPER para formatear la razón del rechazo ---
+const formatRejectionReason = (reason: 'invalid_payment' | 'malicious' | null) => {
+    if (reason === 'invalid_payment') return 'Pago Inválido';
+    if (reason === 'malicious') return 'Act. Sospechosa';
+    return '';
+}
+
 // --- COMPONENTE PDF ---
 export function SalesPDF({ sales, stats, raffle, filterDate }: SalesPDFProps) {
     return (
@@ -163,19 +171,31 @@ export function SalesPDF({ sales, stats, raffle, filterDate }: SalesPDFProps) {
                 </View>
 
                 <View style={styles.table}>
+                    {/* ✅ --- HEADER DE LA TABLA MODIFICADO --- */}
                     <View style={styles.tableHeader} fixed>
                         <Text style={[styles.tableCell, styles.colComprador]}>Comprador</Text>
                         <Text style={[styles.tableCell, styles.colFecha]}>Fecha</Text>
+                        <Text style={[styles.tableCell, styles.colOrigen]}>Origen</Text>
                         <Text style={[styles.tableCell, styles.colStatus]}>Estado</Text>
                         <Text style={[styles.tableCell, styles.colTickets]}>Tickets</Text>
                         <Text style={[styles.tableCell, styles.colMonto]}>Monto</Text>
                         <Text style={[styles.tableCell, styles.colMetodo]}>Método</Text>
                     </View>
+                    
+                    {/* ✅ --- FILAS DE LA TABLA MODIFICADAS --- */}
                     {sales.map(sale => (
                         <View key={sale.id} style={styles.tableRow} wrap={false}>
                             <Text style={[styles.tableCell, styles.colComprador]}>{sale.buyerName || sale.buyerEmail}</Text>
                             <Text style={[styles.tableCell, styles.colFecha]}>{format(new Date(sale.createdAt), "dd/MM/yy hh:mm a")}</Text>
-                            <Text style={[styles.tableCell, styles.colStatus, getStatusStyle(sale.status)]}>{formatStatus(sale.status)}</Text>
+                            <Text style={[styles.tableCell, styles.colOrigen]}>{sale.referralLink?.name || 'Directa'}</Text>
+                            <View style={[styles.tableCell, styles.colStatus]}>
+                                <Text style={getStatusStyle(sale.status)}>{formatStatus(sale.status)}</Text>
+                                {sale.status === 'rejected' && sale.rejectionReason && (
+                                    <Text style={{ fontSize: 6, color: '#dc2626', marginTop: 1 }}>
+                                        ({formatRejectionReason(sale.rejectionReason)})
+                                    </Text>
+                                )}
+                            </View>
                             <Text style={[styles.tableCell, styles.colTickets]}>{sale.ticketCount}</Text>
                             <Text style={[styles.tableCell, styles.colMonto]}>{formatCurrency(parseFloat(sale.amount), raffle.currency)}</Text>
                             <Text style={[styles.tableCell, styles.colMetodo]}>{sale.paymentMethod || 'N/A'}</Text>

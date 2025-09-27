@@ -21,7 +21,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMe
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 // --- Icons ---
-import { ArrowLeft, Calendar as CalendarIcon, ChevronDown, ChevronRight, DollarSign, Filter, Receipt, Search, Ticket, X, Download, Loader2, Clock } from 'lucide-react';
+import { ArrowLeft, Calendar as CalendarIcon, ChevronDown, ChevronRight, DollarSign, Filter, Receipt, Search, Ticket, X, Download, Loader2, Clock, Share2 } from 'lucide-react';
 
 // --- Types ---
 import { RaffleSalesData, PurchaseWithTicketsAndRaffle } from '@/lib/types';
@@ -63,12 +63,18 @@ function StatCard({ icon: Icon, title, value, colorClass = 'text-gray-600' }: { 
   );
 }
 
+// ✅ --- COMPONENTE DE DETALLES MODIFICADO ---
 function SaleDetailContent({ row }: { row: Row<PurchaseWithTicketsAndRaffle> }) {
   const sale = row.original;
   const sortedTickets = useMemo(() =>
     [...sale.tickets].sort((a, b) => a.ticketNumber.localeCompare(b.ticketNumber, undefined, { numeric: true })),
     [sale.tickets]
   );
+  
+  const rejectionReasonMap = {
+    invalid_payment: "Pago Inválido o no Encontrado",
+    malicious: "Actividad Sospechosa"
+  };
 
   return (
     <div className="p-4 bg-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -94,9 +100,25 @@ function SaleDetailContent({ row }: { row: Row<PurchaseWithTicketsAndRaffle> }) 
           ) : <p className="text-sm text-muted-foreground italic mt-2">Sin comprobante.</p>}
         </div>
       </div>
+
+      {/* --- NUEVO: Sección de Motivo del Rechazo --- */}
+      {sale.status === 'rejected' && (
+        <div className="sm:col-span-2 p-3 bg-red-50 border border-red-200 rounded-md">
+          <h4 className="font-semibold text-xs mb-2 text-red-800 uppercase tracking-wider">Motivo del Rechazo</h4>
+          <div className="text-sm space-y-1 text-red-900">
+            <p>
+              <span className="font-medium">Razón:</span> {sale.rejectionReason ? rejectionReasonMap[sale.rejectionReason as keyof typeof rejectionReasonMap] : 'No especificada.'}
+            </p>
+            {sale.rejectionComment && (
+              <p><span className="font-medium">Comentario:</span> {sale.rejectionComment}</p>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
 
 // --- Componente Principal ---
 export function RaffleSalesView({ initialSalesData }: { initialSalesData: RaffleSalesData }) {
@@ -131,17 +153,17 @@ export function RaffleSalesView({ initialSalesData }: { initialSalesData: Raffle
   }, [sales, date, globalFilter, columnFilters]);
 
   const statistics = useMemo(() => {
-  const confirmedSales = filteredSales.filter(s => s.status === 'confirmed');
-  const pendingSales = filteredSales.filter(s => s.status === 'pending');
-  const totalRevenue = confirmedSales.reduce((acc, sale) => acc + parseFloat(sale.amount), 0);
-  const totalTicketsSold = confirmedSales.reduce((acc, sale) => acc + sale.ticketCount, 0);
-  const pendingRevenue = pendingSales.reduce((acc, sale) => acc + parseFloat(sale.amount), 0);
-  // ✅ CAMBIO: Usar 10000 como total de tickets (ya que se generan del 0000 al 9999)
-  const totalTickets = 10000;
-  const progress = totalTickets > 0 ? (totalTicketsSold / totalTickets) * 100 : 0;
-  return { totalSales: filteredSales.length, totalRevenue, totalTicketsSold, pendingRevenue, progress, totalTickets };
-}, [filteredSales]); // ✅ CAMBIO: Remover raffle.totalTickets de las dependencias
+    const confirmedSales = filteredSales.filter(s => s.status === 'confirmed');
+    const pendingSales = filteredSales.filter(s => s.status === 'pending');
+    const totalRevenue = confirmedSales.reduce((acc, sale) => acc + parseFloat(sale.amount), 0);
+    const totalTicketsSold = confirmedSales.reduce((acc, sale) => acc + sale.ticketCount, 0);
+    const pendingRevenue = pendingSales.reduce((acc, sale) => acc + parseFloat(sale.amount), 0);
+    const totalTickets = 10000;
+    const progress = totalTickets > 0 ? (totalTicketsSold / totalTickets) * 100 : 0;
+    return { totalSales: filteredSales.length, totalRevenue, totalTicketsSold, pendingRevenue, progress, totalTickets };
+  }, [filteredSales]);
 
+  // ✅ --- DEFINICIÓN DE COLUMNAS MODIFICADA ---
   const columns: ColumnDef<PurchaseWithTicketsAndRaffle>[] = useMemo(() => [
     {
       accessorKey: 'buyerInfo',
@@ -162,6 +184,23 @@ export function RaffleSalesView({ initialSalesData }: { initialSalesData: Raffle
       header: 'Fecha', 
       cell: ({ row }) => format(new Date(row.getValue("createdAt")), "dd MMM yy, hh:mm a", { locale: es }),
       sortingFn: 'datetime'
+    },
+    // --- NUEVA COLUMNA DE ORIGEN/REFERIDO ---
+    {
+      accessorKey: 'referralLink',
+      header: 'Origen',
+      cell: ({ row }) => {
+        const referralName = row.original.referralLink?.name;
+        return (
+          <div className="flex items-center gap-2">
+              <Share2 className={`h-3 w-3 ${referralName ? 'text-blue-500' : 'text-gray-400'}`}/>
+            {referralName 
+              ? <span className="text-xs font-medium">{referralName}</span> 
+              : <span className="text-xs text-muted-foreground italic">Directa</span>
+            }
+          </div>
+        );
+      }
     },
     { accessorKey: 'ticketCount', header: 'Tickets', cell: ({ row }) => <div className="text-center font-bold">{row.getValue("ticketCount")}</div> },
     { accessorKey: 'amount', header: 'Monto', cell: ({ row }) => <div className="font-semibold">{formatCurrency(row.getValue("amount"), raffle.currency)}</div> },
@@ -214,7 +253,6 @@ export function RaffleSalesView({ initialSalesData }: { initialSalesData: Raffle
             <div className="flex justify-between items-center mb-1">
               <span className="text-sm font-medium text-slate-700">Progreso de la Rifa</span>
               <span className="text-xs font-medium text-slate-500">{statistics.totalTicketsSold} / {statistics.totalTickets} ({statistics.progress.toFixed(1)}%)</span>
-
             </div>
             <Progress value={statistics.progress} className="h-2 [&>div]:bg-orange-500"/>
           </div>
@@ -325,35 +363,35 @@ export function RaffleSalesView({ initialSalesData }: { initialSalesData: Raffle
                 const sale = row.original;
                 return (
                   <Collapsible key={row.id} onOpenChange={() => row.toggleExpanded()}>
-                     <div className="rounded-lg border bg-card text-card-foreground shadow-sm">
-                        <CollapsibleTrigger className="w-full p-4 text-left">
+                       <div className="rounded-lg border bg-card text-card-foreground shadow-sm">
+                         <CollapsibleTrigger className="w-full p-4 text-left">
                            <div className="flex justify-between items-start">
-                              <div>
-                                 <p className="font-semibold">{sale.buyerName || 'N/A'}</p>
-                                 <p className="text-xs text-muted-foreground">{sale.buyerEmail}</p>
-                                 <p className="text-xs text-muted-foreground mt-1">{format(new Date(sale.createdAt), "dd MMM, hh:mm a", { locale: es })}</p>
-                              </div>
-                              <div className="flex flex-col items-end gap-2">
-                                 {getStatusBadge(sale.status)}
-                                 <span className="font-bold text-lg">{formatCurrency(sale.amount, raffle.currency)}</span>
-                              </div>
+                             <div>
+                               <p className="font-semibold">{sale.buyerName || 'N/A'}</p>
+                               <p className="text-xs text-muted-foreground">{sale.buyerEmail}</p>
+                               <p className="text-xs text-muted-foreground mt-1">{format(new Date(sale.createdAt), "dd MMM, hh:mm a", { locale: es })}</p>
+                             </div>
+                             <div className="flex flex-col items-end gap-2">
+                               {getStatusBadge(sale.status)}
+                               <span className="font-bold text-lg">{formatCurrency(sale.amount, raffle.currency)}</span>
+                             </div>
                            </div>
                            <div className="flex justify-between items-center mt-3 pt-3 border-t">
-                              <div className="text-sm">
-                                <span className="text-muted-foreground">Tickets:</span> <span className="font-bold">{sale.ticketCount}</span>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <PurchaseDetailsModal purchase={sale as any} />
-                                <div className="text-muted-foreground">
-                                  {row.getIsExpanded() ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                                </div>
-                              </div>
+                             <div className="text-sm">
+                               <span className="text-muted-foreground">Tickets:</span> <span className="font-bold">{sale.ticketCount}</span>
+                             </div>
+                             <div className="flex items-center gap-2">
+                               <PurchaseDetailsModal purchase={sale as any} />
+                               <div className="text-muted-foreground">
+                                 {row.getIsExpanded() ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                               </div>
+                             </div>
                            </div>
-                        </CollapsibleTrigger>
-                        <CollapsibleContent>
+                         </CollapsibleTrigger>
+                         <CollapsibleContent>
                            <SaleDetailContent row={row} />
-                        </CollapsibleContent>
-                     </div>
+                         </CollapsibleContent>
+                       </div>
                   </Collapsible>
                 )
               }) : (

@@ -1521,18 +1521,25 @@ export async function getSalesDataForRaffle(raffleId: string): Promise<RaffleSal
 
         if (!raffleDetails) return null;
 
-        // 2. Obtener todas las compras de la rifa con sus tickets
+        // 2. Obtener todas las compras de la rifa, incluyendo sus tickets y el referido asociado
         const allSales = await db.query.purchases.findMany({
             where: eq(purchases.raffleId, raffleId),
             orderBy: desc(purchases.createdAt),
             with: {
                 tickets: { columns: { ticketNumber: true } },
+                // --- RELACIÓN AÑADIDA A LA CONSULTA ---
+                referralLink: {
+                    columns: {
+                        name: true // Solo necesitamos el nombre del referido
+                    }
+                },
             },
         });
         
         return {
             raffle: { ...raffleDetails, totalTickets: raffleDetails.minimumTickets },
-            sales: allSales,
+            // Se hace un casting al tipo actualizado para que el componente cliente lo reconozca
+            sales: allSales as unknown as PurchaseWithTicketsAndRaffle[],
         };
 
     } catch (error) {
