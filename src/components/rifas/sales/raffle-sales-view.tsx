@@ -130,7 +130,24 @@ export function RaffleSalesView({ initialSalesData }: { initialSalesData: Raffle
   const [sorting, setSorting] = useState<SortingState>([{ id: 'createdAt', desc: true }]);
 
   useEffect(() => { setIsClient(true); }, []);
+  
+  // ✅ --- NUEVO: OBTENER LISTA DE REFERIDOS PARA EL FILTRO ---
+  const referralOptions = useMemo(() => {
+    const referrals = new Set<string>();
+    sales.forEach(sale => {
+        if (sale.referralLink?.name) {
+            referrals.add(sale.referralLink.name);
+        }
+    });
+    const options = Array.from(referrals).sort();
+    // Añadir "Directa" si hay ventas sin referido
+    if (sales.some(sale => !sale.referralLink)) {
+        options.unshift('Directa');
+    }
+    return options;
+  }, [sales]);
 
+  // ✅ --- LÓGICA DE FILTRADO ACTUALIZADA ---
   const filteredSales = useMemo(() => {
     let filtered = sales;
     if (date) {
@@ -146,7 +163,16 @@ export function RaffleSalesView({ initialSalesData }: { initialSalesData: Raffle
     columnFilters.forEach(filter => {
       const { id, value } = filter;
       if (Array.isArray(value) && value.length > 0) {
-        filtered = filtered.filter(sale => value.includes((sale as any)[id]));
+        if (id === 'status') {
+            filtered = filtered.filter(sale => value.includes(sale.status));
+        }
+        // Añadimos la lógica para filtrar por referido
+        if (id === 'referral') {
+            filtered = filtered.filter(sale => {
+                const saleReferral = sale.referralLink?.name || 'Directa';
+                return value.includes(saleReferral);
+            });
+        }
       }
     });
     return filtered;
@@ -163,7 +189,7 @@ export function RaffleSalesView({ initialSalesData }: { initialSalesData: Raffle
     return { totalSales: filteredSales.length, totalRevenue, totalTicketsSold, pendingRevenue, progress, totalTickets };
   }, [filteredSales]);
 
-  // ✅ --- DEFINICIÓN DE COLUMNAS MODIFICADA ---
+  // ✅ --- DEFINICIÓN DE COLUMNAS CON ACCESSORFN PARA FILTRADO DE REFERIDOS ---
   const columns: ColumnDef<PurchaseWithTicketsAndRaffle>[] = useMemo(() => [
     {
       accessorKey: 'buyerInfo',
@@ -185,9 +211,11 @@ export function RaffleSalesView({ initialSalesData }: { initialSalesData: Raffle
       cell: ({ row }) => format(new Date(row.getValue("createdAt")), "dd MMM yy, hh:mm a", { locale: es }),
       sortingFn: 'datetime'
     },
-    // --- NUEVA COLUMNA DE ORIGEN/REFERIDO ---
     {
-      accessorKey: 'referralLink',
+      // ID único para referenciar la columna en los filtros
+      id: 'referral',
+      // Función para obtener el valor de la celda para el filtrado
+      accessorFn: row => row.referralLink?.name || 'Directa',
       header: 'Origen',
       cell: ({ row }) => {
         const referralName = row.original.referralLink?.name;
@@ -278,13 +306,14 @@ export function RaffleSalesView({ initialSalesData }: { initialSalesData: Raffle
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={date} onSelect={setDate} initialFocus /></PopoverContent>
               </Popover>
+              {/* ✅ --- MENÚ DE FILTROS ACTUALIZADO --- */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild><Button variant="outline" className="w-full sm:w-auto"><Filter className="mr-2 h-4 w-4" />Filtros</Button></DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   <DropdownMenuLabel>Estado</DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   {['confirmed', 'pending', 'rejected'].map(status => (
-                    <DropdownMenuCheckboxItem key={status} checked={table.getColumn('status')?.getFilterValue()?.includes(status)} onCheckedChange={(checked) => {
+                    <DropdownMenuCheckboxItem key={status} checked={(table.getColumn('status')?.getFilterValue() as string[] ?? []).includes(status)} onCheckedChange={(checked) => {
                       const currentFilter = (table.getColumn('status')?.getFilterValue() as string[] ?? []);
                       const newFilter = checked ? [...currentFilter, status] : currentFilter.filter(s => s !== status);
                       table.getColumn('status')?.setFilterValue(newFilter.length > 0 ? newFilter : undefined);
@@ -292,8 +321,35 @@ export function RaffleSalesView({ initialSalesData }: { initialSalesData: Raffle
                       {status.charAt(0).toUpperCase() + status.slice(1)}
                     </DropdownMenuCheckboxItem>
                   ))}
+                  
+                  {/* --- NUEVA SECCIÓN DE FILTRO POR REFERIDO --- */}
+                  {referralOptions.length > 0 && (
+                    <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuLabel>Origen</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        {referralOptions.map(referral => (
+                            <DropdownMenuCheckboxItem
+                                key={referral}
+                                checked={(table.getColumn('referral')?.getFilterValue() as string[] ?? []).includes(referral)}
+                                onCheckedChange={(checked) => {
+                                    const column = table.getColumn('referral');
+                                    if (!column) return;
+                                    const currentFilter = (column.getFilterValue() as string[] ?? []);
+                                    const newFilter = checked
+                                        ? [...currentFilter, referral]
+                                        : currentFilter.filter(r => r !== referral);
+                                    column.setFilterValue(newFilter.length > 0 ? newFilter : undefined);
+                                }}
+                            >
+                                {referral}
+                            </DropdownMenuCheckboxItem>
+                        ))}
+                    </>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
+
               {isFiltered && (
                 <Button variant="ghost" onClick={resetFilters} size="icon" className="h-9 w-9">
                   <X className="h-4 w-4" /><span className="sr-only">Limpiar filtros</span>
