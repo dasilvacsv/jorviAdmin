@@ -186,7 +186,7 @@ export async function getTopBuyers(raffleId: string): Promise<{ buyerName: strin
       ))
       .groupBy(purchases.buyerName, purchases.buyerEmail)
       .orderBy(desc(sql`sum(${purchases.ticketCount})`))
-      .limit(5); // Obtenemos el top 5
+      .limit(10); // Obtenemos el top 10
 
     return topBuyersData;
 
