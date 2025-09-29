@@ -2,6 +2,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link"; // <--- AÑADIDO
 import {
     AlertDialog,
     AlertDialogAction,
@@ -105,7 +106,7 @@ function EditableInfoDetail({
     };
 
     return (
-        <div className="flex items-center justify-between text-sm py-2 border-b border-slate-200 last:border-b-0">
+        <div className="flex items-center justify-between text-sm py-2 border-b border-slate-200 last:border-b-0 group">
             <div className="flex items-center gap-2 text-slate-600">
                 <Icon className="h-4 w-4" />
                 <span>{label}</span>
@@ -250,16 +251,22 @@ export function PurchaseDetailsModal({ purchase, raffleCurrency = 'USD' }: Purch
                 <Button variant="outline" size="sm"><Eye className="h-4 w-4 mr-2" />Ver Detalles</Button>
             </DialogTrigger>
             <DialogContent className="max-w-md sm:max-w-2xl lg:max-w-6xl w-full p-0 max-h-[90vh] flex flex-col">
-                <DialogHeader className="p-6 pb-4 border-b">
+                {/* --- HEADER MODIFICADO --- */}
+                <DialogHeader className="p-6 pb-4 border-b flex flex-row items-center justify-between">
                     <DialogTitle className="text-2xl flex items-center gap-3">
                         <Receipt className="h-6 w-6 text-orange-500" />
                         Detalles de la Compra
                     </DialogTitle>
+                    <Button asChild variant="ghost" size="icon">
+                        <Link href={`/sale/${purchase.id}`} target="_blank" rel="noopener noreferrer">
+                            <ExternalLink className="h-5 w-5" />
+                        </Link>
+                    </Button>
                 </DialogHeader>
 
                 <div className="flex-1 overflow-y-auto p-6 bg-slate-50">
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                        <Card className="shadow-none border border-slate-200 group">
+                        <Card className="shadow-none border border-slate-200">
                             <CardHeader>
                                 <CardTitle className="flex items-center gap-2 text-lg">
                                     <User className="h-5 w-5 text-orange-500" />

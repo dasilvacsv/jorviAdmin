@@ -18,7 +18,7 @@ import {
   referralLinks,
 } from "./db/schema";
 import { revalidatePath } from "next/cache";
-import { eq, desc, inArray, and, lt, sql } from "drizzle-orm";
+import { eq, desc, inArray, and, lt, sql, like, ne } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { uploadToS3, deleteFromS3 } from "./s3";
 import crypto from "crypto";
@@ -193,6 +193,115 @@ export async function getTopBuyers(raffleId: string): Promise<{ buyerName: strin
   } catch (error) {
     console.error("Error al obtener top compradores:", error);
     return []; // Devolver un array vacío en caso de error
+  }
+}
+
+// ----------------------------------------------------------------
+// NUEVA FUNCIONALIDAD: OBTENER DETALLES DE UNA VENTA Y REFERENCIAS SIMILARES
+// ----------------------------------------------------------------
+
+export type SaleDetailData = {
+  purchase: {
+    id: string;
+    buyerName: string | null;
+    buyerEmail: string;
+    buyerPhone: string | null;
+    paymentReference: string | null;
+    paymentMethod: string | null;
+    paymentScreenshotUrl: string | null;
+    amount: string;
+    ticketCount: number;
+    status: 'pending' | 'confirmed' | 'rejected';
+    createdAt: Date;
+    rejectionReason: string | null;
+    rejectionComment: string | null;
+    raffle: {
+      id: string;
+      name: string;
+      currency: 'USD' | 'VES';
+    };
+    referralLink: {
+      name: string;
+      code: string;
+    } | null;
+    tickets: {
+      ticketNumber: string;
+    }[];
+  };
+  similarReferences: {
+    id: string;
+    buyerName: string | null;
+    buyerEmail: string;
+    paymentReference: string | null;
+    amount: string;
+    status: string;
+    createdAt: Date;
+    raffle: {
+      name: string;
+    };
+  }[];
+};
+
+/**
+ * Obtiene los detalles de una venta específica y busca referencias similares
+ * @param saleId ID de la venta
+ * @returns Datos de la venta y referencias similares
+ */
+export async function getSaleDetails(saleId: string): Promise<SaleDetailData | null> {
+  try {
+    // Verificar permisos de administrador
+    await requireAdmin();
+
+    // Obtener la venta principal con toda su información
+    const sale = await db.query.purchases.findFirst({
+      where: eq(purchases.id, saleId),
+      with: {
+        raffle: {
+          columns: { id: true, name: true, currency: true }
+        },
+        referralLink: {
+          columns: { name: true, code: true }
+        },
+        tickets: {
+          columns: { ticketNumber: true }
+        }
+      }
+    });
+
+    if (!sale) {
+      return null;
+    }
+
+    // Buscar referencias similares (últimos 4 dígitos)
+    let similarReferences: any[] = [];
+    
+    if (sale.paymentReference && sale.paymentReference.length >= 4) {
+      const lastFourDigits = sale.paymentReference.slice(-4);
+      
+      // Buscar otras compras que terminen con los mismos 4 dígitos
+      similarReferences = await db.query.purchases.findMany({
+        where: and(
+          like(purchases.paymentReference, `%${lastFourDigits}`),
+          ne(purchases.id, saleId) // Excluir la venta actual
+        ),
+        with: {
+          raffle: {
+            columns: { name: true }
+          }
+        },
+        orderBy: desc(purchases.createdAt),
+        limit: 10 // Limitar a 10 resultados
+      });
+    }
+
+    return {
+      purchase: sale,
+      similarReferences
+    };
+
+  } catch (error) {
+    console.error("Error al obtener detalles de la venta:", error);
+    return null;
   }
 }
 
