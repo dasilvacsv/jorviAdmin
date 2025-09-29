@@ -40,9 +40,9 @@ const getStatusBadge = (status: string | null) => {
     rejected: "bg-red-100 text-red-800 border-red-300",
   };
   const textMap = { confirmed: 'Confirmado', pending: 'Pendiente', rejected: 'Rechazado' };
-
+  
   if (!status || !statusMap[status as keyof typeof statusMap]) return null;
-
+  
   return <Badge className={`${statusMap[status as keyof typeof statusMap]} hover:bg-opacity-80`}>{textMap[status as keyof typeof textMap]}</Badge>;
 };
 
@@ -68,7 +68,7 @@ function SaleDetailContent({ row }: { row: Row<PurchaseWithTicketsAndRaffle> }) 
     [...sale.tickets].sort((a, b) => a.ticketNumber.localeCompare(b.ticketNumber, undefined, { numeric: true })),
     [sale.tickets]
   );
-
+  
   const rejectionReasonMap = {
     invalid_payment: "Pago Inválido o no Encontrado",
     malicious: "Actividad Sospechosa"
@@ -127,52 +127,58 @@ export function RaffleSalesView({ initialSalesData }: { initialSalesData: Raffle
   const [sorting, setSorting] = useState<SortingState>([{ id: 'createdAt', desc: true }]);
 
   useEffect(() => { setIsClient(true); }, []);
-
+  
   const referralOptions = useMemo(() => {
     const referrals = new Set<string>();
     sales.forEach(sale => {
-      if (sale.referralLink?.name) {
-        referrals.add(sale.referralLink.name);
-      }
+        if (sale.referralLink?.name) {
+            referrals.add(sale.referralLink.name);
+        }
     });
     const options = Array.from(referrals).sort();
     if (sales.some(sale => !sale.referralLink)) {
-      options.unshift('Directa');
+        options.unshift('Directa');
     }
     return options;
   }, [sales]);
 
-  // ✅ --- LÓGICA DE FILTRADO CORREGIDA Y REFACTORIZADA ---
+  // ✅ --- LÓGICA DE FILTRADO COMPLETAMENTE REESCRITA PARA MÁXIMA FIABILIDAD ---
   const filteredSales = useMemo(() => {
-    return sales.filter(sale => {
-      // Filtro global (Búsqueda por nombre/email)
+    let filteredData = sales;
+
+    // 1. Aplicar filtro global (búsqueda)
+    if (globalFilter) {
       const lowercasedFilter = globalFilter.toLowerCase();
-      const matchesGlobal = !globalFilter ||
+      filteredData = filteredData.filter(sale =>
         sale.buyerName?.toLowerCase().includes(lowercasedFilter) ||
-        sale.buyerEmail.toLowerCase().includes(lowercasedFilter);
+        sale.buyerEmail.toLowerCase().includes(lowercasedFilter)
+      );
+    }
 
-      // Filtro por fecha
-      const matchesDate = !date || isSameDay(new Date(sale.createdAt), date);
+    // 2. Aplicar filtro de fecha
+    if (date) {
+      filteredData = filteredData.filter(sale => isSameDay(new Date(sale.createdAt), date));
+    }
 
-      // Filtros de columna (Estado y Referido)
-      const matchesColumns = columnFilters.every(filter => {
-        const { id, value } = filter;
-        const filterValues = value as string[];
+    // 3. Aplicar filtros de columna (Estado, Referido)
+    if (columnFilters.length > 0) {
+      // Filtro por Estado
+      const statusFilter = columnFilters.find(f => f.id === 'status');
+      if (statusFilter && Array.isArray(statusFilter.value) && statusFilter.value.length > 0) {
+        filteredData = filteredData.filter(sale => (statusFilter.value as string[]).includes(sale.status));
+      }
 
-        if (!filterValues || filterValues.length === 0) return true;
-
-        if (id === 'status') {
-          return filterValues.includes(sale.status);
-        }
-        if (id === 'referral') {
+      // Filtro por Referido
+      const referralFilter = columnFilters.find(f => f.id === 'referral');
+      if (referralFilter && Array.isArray(referralFilter.value) && referralFilter.value.length > 0) {
+        filteredData = filteredData.filter(sale => {
           const saleReferral = sale.referralLink?.name || 'Directa';
-          return filterValues.includes(saleReferral);
-        }
-        return true;
-      });
+          return (referralFilter.value as string[]).includes(saleReferral);
+        });
+      }
+    }
 
-      return matchesGlobal && matchesDate && matchesColumns;
-    });
+    return filteredData;
   }, [sales, date, globalFilter, columnFilters]);
 
   const statistics = useMemo(() => {
@@ -201,9 +207,9 @@ export function RaffleSalesView({ initialSalesData }: { initialSalesData: Raffle
       }
     },
     { accessorKey: 'status', header: 'Estado', cell: ({ row }) => getStatusBadge(row.getValue("status")) },
-    {
-      accessorKey: 'createdAt',
-      header: 'Fecha',
+    { 
+      accessorKey: 'createdAt', 
+      header: 'Fecha', 
       cell: ({ row }) => format(new Date(row.getValue("createdAt")), "dd MMM yy, hh:mm a", { locale: es }),
       sortingFn: 'datetime'
     },
@@ -215,9 +221,9 @@ export function RaffleSalesView({ initialSalesData }: { initialSalesData: Raffle
         const referralName = row.original.referralLink?.name;
         return (
           <div className="flex items-center gap-2">
-            <Share2 className={`h-3 w-3 ${referralName ? 'text-blue-500' : 'text-gray-400'}`} />
-            {referralName
-              ? <span className="text-xs font-medium">{referralName}</span>
+              <Share2 className={`h-3 w-3 ${referralName ? 'text-blue-500' : 'text-gray-400'}`}/>
+            {referralName 
+              ? <span className="text-xs font-medium">{referralName}</span> 
               : <span className="text-xs text-muted-foreground italic">Directa</span>
             }
           </div>
@@ -264,20 +270,20 @@ export function RaffleSalesView({ initialSalesData }: { initialSalesData: Raffle
             Análisis de la rifa: <span className="font-semibold text-orange-600">{raffle.name}</span>
           </p>
         </header>
-
+        
         <section className="mb-6 space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            <StatCard icon={Receipt} title="Ventas Totales" value={statistics.totalSales} colorClass="text-blue-600" />
-            <StatCard icon={Ticket} title="Tickets Vendidos" value={statistics.totalTicketsSold} colorClass="text-green-600" />
-            <StatCard icon={DollarSign} title="Ingresos" value={formatCurrency(statistics.totalRevenue, raffle.currency)} colorClass="text-indigo-600" />
-            <StatCard icon={Clock} title="Pendiente" value={formatCurrency(statistics.pendingRevenue, raffle.currency)} colorClass="text-yellow-600" />
+            <StatCard icon={Receipt} title="Ventas Totales" value={statistics.totalSales} colorClass="text-blue-600"/>
+            <StatCard icon={Ticket} title="Tickets Vendidos" value={statistics.totalTicketsSold} colorClass="text-green-600"/>
+            <StatCard icon={DollarSign} title="Ingresos" value={formatCurrency(statistics.totalRevenue, raffle.currency)} colorClass="text-indigo-600"/>
+            <StatCard icon={Clock} title="Pendiente" value={formatCurrency(statistics.pendingRevenue, raffle.currency)} colorClass="text-yellow-600"/>
           </div>
           <div className="bg-white p-3 rounded-lg shadow-sm">
             <div className="flex justify-between items-center mb-1">
               <span className="text-sm font-medium text-slate-700">Progreso de la Rifa</span>
               <span className="text-xs font-medium text-slate-500">{statistics.totalTicketsSold} / {statistics.totalTickets} ({statistics.progress.toFixed(1)}%)</span>
             </div>
-            <Progress value={statistics.progress} className="h-2 [&>div]:bg-orange-500" />
+            <Progress value={statistics.progress} className="h-2 [&>div]:bg-orange-500"/>
           </div>
         </section>
 
@@ -287,7 +293,6 @@ export function RaffleSalesView({ initialSalesData }: { initialSalesData: Raffle
             <CardDescription>Explora, filtra y gestiona todas las ventas.</CardDescription>
           </CardHeader>
           <CardContent>
-            {/* ✅ --- SECCIÓN DE FILTROS ACTUALIZADA CON BOTONES SEPARADOS --- */}
             <div className="flex flex-wrap items-center gap-2 mb-4">
               <div className="relative flex-grow min-w-[200px]">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -302,8 +307,7 @@ export function RaffleSalesView({ initialSalesData }: { initialSalesData: Raffle
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={date} onSelect={setDate} initialFocus /></PopoverContent>
               </Popover>
-
-              {/* Filtro de Estado */}
+              
               <DropdownMenu>
                 <DropdownMenuTrigger asChild><Button variant="outline" className="w-full sm:w-auto"><Filter className="mr-2 h-4 w-4" />Estado</Button></DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
@@ -323,47 +327,46 @@ export function RaffleSalesView({ initialSalesData }: { initialSalesData: Raffle
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              {/* --- NUEVO BOTÓN DE FILTRO PARA REFERIDOS --- */}
               {referralOptions.length > 0 && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" className="w-full sm:w-auto">
-                      <Share2 className="mr-2 h-4 w-4" />
-                      Referido
-                      {selectedReferrals.length > 0 && (
-                        <>
-                          <DropdownMenuSeparator orientation="vertical" className="mx-2 h-4" />
-                          <Badge variant="secondary" className="rounded-sm px-1 font-normal lg:hidden">
-                            {selectedReferrals.length}
-                          </Badge>
-                          <Badge variant="secondary" className="rounded-sm px-1 font-normal hidden lg:block">
-                            {selectedReferrals.length} seleccionado(s)
-                          </Badge>
-                        </>
-                      )}
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-[200px]">
-                    <DropdownMenuLabel>Origen de Venta</DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    {referralOptions.map(referral => (
-                      <DropdownMenuCheckboxItem
-                        key={referral}
-                        checked={selectedReferrals.includes(referral)}
-                        onCheckedChange={(checked) => {
-                          const column = table.getColumn('referral');
-                          if (!column) return;
-                          const newFilter = checked
-                            ? [...selectedReferrals, referral]
-                            : selectedReferrals.filter(r => r !== referral);
-                          column.setFilterValue(newFilter.length > 0 ? newFilter : undefined);
-                        }}
-                      >
-                        {referral}
-                      </DropdownMenuCheckboxItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button variant="outline" className="w-full sm:w-auto">
+                            <Share2 className="mr-2 h-4 w-4" />
+                            Referido
+                            {selectedReferrals.length > 0 && (
+                                <>
+                                  <DropdownMenuSeparator orientation="vertical" className="mx-2 h-4" />
+                                  <Badge variant="secondary" className="rounded-sm px-1 font-normal lg:hidden">
+                                      {selectedReferrals.length}
+                                  </Badge>
+                                  <Badge variant="secondary" className="rounded-sm px-1 font-normal hidden lg:block">
+                                      {selectedReferrals.length} seleccionado(s)
+                                  </Badge>
+                                </>
+                            )}
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-[200px]">
+                        <DropdownMenuLabel>Origen de Venta</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        {referralOptions.map(referral => (
+                            <DropdownMenuCheckboxItem
+                                key={referral}
+                                checked={selectedReferrals.includes(referral)}
+                                onCheckedChange={(checked) => {
+                                    const column = table.getColumn('referral');
+                                    if (!column) return;
+                                    const newFilter = checked
+                                        ? [...selectedReferrals, referral]
+                                        : selectedReferrals.filter(r => r !== referral);
+                                    column.setFilterValue(newFilter.length > 0 ? newFilter : undefined);
+                                }}
+                            >
+                                {referral}
+                            </DropdownMenuCheckboxItem>
+                        ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
               )}
 
               {isFiltered && (
@@ -386,14 +389,13 @@ export function RaffleSalesView({ initialSalesData }: { initialSalesData: Raffle
               )}
             </div>
 
-            {/* --- Vista de Tabla para Desktop --- */}
             <div className="hidden md:block">
               <Table>
                 <TableHeader>
                   {table.getHeaderGroups().map(headerGroup => (
                     <TableRow key={headerGroup.id}>
                       {headerGroup.headers.map(header => <TableHead key={header.id}>{flexRender(header.column.columnDef.header, header.getContext())}</TableHead>)}
-                      <TableHead /> {/* Columna extra para el botón de expandir */}
+                       <TableHead />
                     </TableRow>
                   ))}
                 </TableHeader>
@@ -407,9 +409,9 @@ export function RaffleSalesView({ initialSalesData }: { initialSalesData: Raffle
                           ))}
                           <TableCell>
                             <CollapsibleTrigger asChild>
-                              <Button variant="ghost" size="icon">
-                                {row.getIsExpanded() ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                              </Button>
+                               <Button variant="ghost" size="icon">
+                                 {row.getIsExpanded() ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                               </Button>
                             </CollapsibleTrigger>
                           </TableCell>
                         </TableRow>
@@ -429,41 +431,40 @@ export function RaffleSalesView({ initialSalesData }: { initialSalesData: Raffle
               </Table>
             </div>
 
-            {/* --- Vista de Tarjetas para Móvil --- */}
             <div className="md:hidden space-y-3">
               {table.getRowModel().rows?.length ? table.getRowModel().rows.map(row => {
                 const sale = row.original;
                 return (
                   <Collapsible key={row.id} onOpenChange={() => row.toggleExpanded()}>
-                    <div className="rounded-lg border bg-card text-card-foreground shadow-sm">
-                      <CollapsibleTrigger className="w-full p-4 text-left">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <p className="font-semibold">{sale.buyerName || 'N/A'}</p>
-                            <p className="text-xs text-muted-foreground">{sale.buyerEmail}</p>
-                            <p className="text-xs text-muted-foreground mt-1">{format(new Date(sale.createdAt), "dd MMM, hh:mm a", { locale: es })}</p>
-                          </div>
-                          <div className="flex flex-col items-end gap-2">
-                            {getStatusBadge(sale.status)}
-                            <span className="font-bold text-lg">{formatCurrency(sale.amount, raffle.currency)}</span>
-                          </div>
-                        </div>
-                        <div className="flex justify-between items-center mt-3 pt-3 border-t">
-                          <div className="text-sm">
-                            <span className="text-muted-foreground">Tickets:</span> <span className="font-bold">{sale.ticketCount}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <PurchaseDetailsModal purchase={sale as any} />
-                            <div className="text-muted-foreground">
-                              {row.getIsExpanded() ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                            </div>
-                          </div>
-                        </div>
-                      </CollapsibleTrigger>
-                      <CollapsibleContent>
-                        <SaleDetailContent row={row} />
-                      </CollapsibleContent>
-                    </div>
+                       <div className="rounded-lg border bg-card text-card-foreground shadow-sm">
+                         <CollapsibleTrigger className="w-full p-4 text-left">
+                           <div className="flex justify-between items-start">
+                             <div>
+                               <p className="font-semibold">{sale.buyerName || 'N/A'}</p>
+                               <p className="text-xs text-muted-foreground">{sale.buyerEmail}</p>
+                               <p className="text-xs text-muted-foreground mt-1">{format(new Date(sale.createdAt), "dd MMM, hh:mm a", { locale: es })}</p>
+                             </div>
+                             <div className="flex flex-col items-end gap-2">
+                               {getStatusBadge(sale.status)}
+                               <span className="font-bold text-lg">{formatCurrency(sale.amount, raffle.currency)}</span>
+                             </div>
+                           </div>
+                           <div className="flex justify-between items-center mt-3 pt-3 border-t">
+                             <div className="text-sm">
+                               <span className="text-muted-foreground">Tickets:</span> <span className="font-bold">{sale.ticketCount}</span>
+                             </div>
+                             <div className="flex items-center gap-2">
+                               <PurchaseDetailsModal purchase={sale as any} />
+                               <div className="text-muted-foreground">
+                                 {row.getIsExpanded() ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                               </div>
+                             </div>
+                           </div>
+                         </CollapsibleTrigger>
+                         <CollapsibleContent>
+                           <SaleDetailContent row={row} />
+                         </CollapsibleContent>
+                       </div>
                   </Collapsible>
                 )
               }) : (
