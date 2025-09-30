@@ -1,8 +1,7 @@
-// components/admin/PurchaseDetailsModal.tsx
 "use client";
 
 import { useState, useEffect } from "react";
-import Link from "next/link"; // <--- AÑADIDO
+import Link from "next/link";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -53,9 +52,12 @@ interface Purchase {
     status: string;
 }
 
+// --- INTERFAZ DE PROPS MODIFICADA ---
 interface PurchaseDetailsModalProps {
     purchase: Purchase;
     raffleCurrency?: 'USD' | 'VES';
+    isDuplicate?: boolean; // <--- PROP AÑADIDA
+    duplicateSaleId?: string; // <--- PROP AÑADIDA
 }
 
 function SubmitButton({ children, newStatus, disabled }: { children: React.ReactNode; newStatus: "confirmed" | "rejected", disabled?: boolean }) {
@@ -165,7 +167,8 @@ function CompactInfoDetail({ icon, label, value }: { icon: React.ElementType, la
     );
 }
 
-export function PurchaseDetailsModal({ purchase, raffleCurrency = 'USD' }: PurchaseDetailsModalProps) {
+// --- COMPONENTE PRINCIPAL MODIFICADO ---
+export function PurchaseDetailsModal({ purchase, raffleCurrency = 'USD', isDuplicate = false, duplicateSaleId }: PurchaseDetailsModalProps) {
     const [open, setOpen] = useState(false);
     const [rejectionDialogOpen, setRejectionDialogOpen] = useState(false);
     const [rejectionReason, setRejectionReason] = useState<'invalid_payment' | 'malicious' | ''>('');
@@ -251,7 +254,6 @@ export function PurchaseDetailsModal({ purchase, raffleCurrency = 'USD' }: Purch
                 <Button variant="outline" size="sm"><Eye className="h-4 w-4 mr-2" />Ver Detalles</Button>
             </DialogTrigger>
             <DialogContent className="max-w-md sm:max-w-2xl lg:max-w-6xl w-full p-0 max-h-[90vh] flex flex-col">
-                {/* --- HEADER MODIFICADO --- */}
                 <DialogHeader className="p-6 pb-4 border-b flex flex-row items-center justify-between">
                     <DialogTitle className="text-2xl flex items-center gap-3">
                         <Receipt className="h-6 w-6 text-orange-500" />
@@ -305,7 +307,28 @@ export function PurchaseDetailsModal({ purchase, raffleCurrency = 'USD' }: Purch
                                 <CompactInfoDetail icon={Ticket} label="Tickets" value={purchaseData.ticketCount} />
                                 <CompactInfoDetail icon={DollarSign} label="Monto" value={formatCurrency(purchaseData.amount, raffleCurrency)} />
                                 <CompactInfoDetail icon={CreditCard} label="Método" value={purchaseData.paymentMethod} />
-                                <CompactInfoDetail icon={Hash} label="Referencia" value={purchaseData.paymentReference} />
+                                
+                                {/* --- BLOQUE DE REFERENCIA MODIFICADO --- */}
+                                <div className="flex items-center justify-between text-sm py-2">
+                                    <div className="flex items-center gap-2 text-slate-600">
+                                        <Hash className="h-4 w-4" />
+                                        <span>Referencia</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className={`font-semibold break-all text-right font-mono ${isDuplicate ? 'text-red-500' : 'text-slate-800'}`}>
+                                            {purchaseData.paymentReference || <span className="italic text-slate-400 font-sans">N/A</span>}
+                                        </span>
+                                        {isDuplicate && duplicateSaleId && (
+                                            <Button asChild variant="outline" size="sm" className="h-7 px-2">
+                                                <Link href={`/sale/${duplicateSaleId}`} target="_blank">
+                                                    Ir a la venta
+                                                    <ExternalLink className="h-3 w-3 ml-1.5" />
+                                                </Link>
+                                            </Button>
+                                        )}
+                                    </div>
+                                </div>
+
                             </CardContent>
                         </Card>
 
