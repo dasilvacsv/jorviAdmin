@@ -1682,7 +1682,7 @@ export async function getPaginatedSales(
     sorting: SortingState;
     globalFilter: string;
     columnFilters: { id: string; value: unknown }[];
-    dateFilter?: string; // Fecha en formato ISO string
+    dateFilter?: string; // Fecha en formato 'yyyy-MM-dd'
   }
 ) {
   try {
@@ -1690,7 +1690,7 @@ export async function getPaginatedSales(
 
     const { pageIndex, pageSize, sorting, globalFilter, columnFilters, dateFilter } = options;
 
-    // --- 1. Construir las condiciones del WHERE dinámicamente (Lógica sin cambios) ---
+    // --- 1. Construir las condiciones del WHERE dinámicamente ---
     const conditions = [eq(purchases.raffleId, raffleId)];
     if (globalFilter) {
       conditions.push(or(like(purchases.buyerName, `%${globalFilter}%`), like(purchases.buyerEmail, `%${globalFilter}%`)));
@@ -1712,21 +1712,29 @@ export async function getPaginatedSales(
         if (referralConditions.length > 0) conditions.push(or(...referralConditions));
       }
     });
+
+    // --- ✨ CAMBIO APLICADO AQUÍ ✨ ---
     if (dateFilter) {
-        const date = new Date(dateFilter);
-        const startOfDay = new Date(date.setHours(0, 0, 0, 0));
-        const endOfDay = new Date(date.setHours(23, 59, 59, 999));
+        // dateFilter ahora es un string como "2025-09-30".
+        // Construimos el rango del día completo en la zona horaria de Venezuela (UTC-4).
+        // El inicio del día es a las 00:00:00 en UTC-4.
+        const startOfDay = new Date(`${dateFilter}T00:00:00.000-04:00`); 
+        // El final del día es a las 23:59:59.999 en UTC-4.
+        const endOfDay = new Date(`${dateFilter}T23:59:59.999-04:00`);
+        
+        // La base de datos (que almacena en UTC) podrá comparar correctamente este rango.
         conditions.push(sql`${purchases.createdAt} >= ${startOfDay} AND ${purchases.createdAt} <= ${endOfDay}`);
     }
+
     const whereClause = and(...conditions);
 
-    // --- 2. Construir la ordenación (ORDER BY) dinámicamente (Lógica sin cambios) ---
+    // --- 2. Construir la ordenación (ORDER BY) dinámicamente ---
     const orderBy = sorting.length > 0
       ? sorting.map(sort => sort.desc ? desc(purchases[sort.id as keyof typeof purchases.$inferSelect]) : asc(purchases[sort.id as keyof typeof purchases.$inferSelect]))
       : [desc(purchases.createdAt)];
 
 
-    // --- ✨ 3. Ejecutar las dos consultas en paralelo ---
+    // --- 3. Ejecutar las dos consultas en paralelo ---
     const [data, statsResult] = await Promise.all([
       // Consulta para obtener los datos de la página actual
       db.query.purchases.findMany({
@@ -1739,7 +1747,7 @@ export async function getPaginatedSales(
           referralLink: { columns: { name: true } },
         },
       }),
-      // NUEVA Consulta para obtener las estadísticas totales que coinciden con los filtros
+      // Consulta para obtener las estadísticas totales que coinciden con los filtros
       db.select({
         totalSales: sql<number>`count(*)`.mapWith(Number),
         totalRevenue: sql<number>`sum(case when ${purchases.status} = 'confirmed' then ${purchases.amount}::decimal else 0 end)`.mapWith(Number),
@@ -1751,7 +1759,7 @@ export async function getPaginatedSales(
     const totalRowCount = statsResult[0]?.totalSales || 0;
     const pageCount = Math.ceil(totalRowCount / pageSize);
 
-    // ✨ Devolvemos las estadísticas junto con los datos
+    // Devolvemos las estadísticas junto con los datos
     return {
       rows: data as unknown as PurchaseWithTicketsAndRaffle[],
       pageCount,

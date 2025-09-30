@@ -135,7 +135,14 @@ export function RaffleSalesView({ raffle, initialData, initialTotalRowCount, ini
     const fetchSales = useCallback(async (options: { pageIndex: number; pageSize: number; reset?: boolean }) => {
         setIsFetching(true);
         const { pageIndex, pageSize, reset = false } = options;
-        const result = await getPaginatedSales(raffle.id, { pageIndex, pageSize, sorting, globalFilter: debouncedGlobalFilter, columnFilters, dateFilter: date?.toISOString(), });
+        const result = await getPaginatedSales(raffle.id, {
+            pageIndex,
+            pageSize,
+            sorting,
+            globalFilter: debouncedGlobalFilter,
+            columnFilters,
+            dateFilter: date ? format(date, 'yyyy-MM-dd') : undefined, // <-- LÍNEA MODIFICADA
+        });
         if (result && !result.error) {
             setData(prev => (reset ? result.rows : [...prev, ...result.rows]));
             setTotalRowCount(result.totalRowCount);
@@ -239,11 +246,11 @@ export function RaffleSalesView({ raffle, initialData, initialTotalRowCount, ini
                              <div className="relative flex-grow min-w-[200px]"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input placeholder="Buscar por nombre o email..." value={globalFilter} onChange={(e) => setGlobalFilter(e.target.value)} className="pl-10" /></div>
                              <Popover><PopoverTrigger asChild><Button variant="outline" className="w-full sm:w-auto justify-start text-left font-normal"><CalendarIcon className="mr-2 h-4 w-4" />{date ? format(date, "PPP", { locale: es }) : <span>Fecha</span>}</Button></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={date} onSelect={setDate} initialFocus /></PopoverContent></Popover>
                              <DropdownMenu onOpenChange={(open) => { const column = table.getColumn('status'); if (!column) return; if (open) { setTempSelectedStatuses(column.getFilterValue() as string[] ?? []); } else { column.setFilterValue(tempSelectedStatuses.length > 0 ? tempSelectedStatuses : undefined); }}}>
-                                <DropdownMenuTrigger asChild><Button variant="outline" className="w-full sm:w-auto"><Filter className="mr-2 h-4 w-4" />Estado</Button></DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                    <DropdownMenuLabel>Estado</DropdownMenuLabel><DropdownMenuSeparator />
-                                    {['confirmed', 'pending', 'rejected'].map(status => (<DropdownMenuCheckboxItem key={status} checked={tempSelectedStatuses.includes(status)} onCheckedChange={(checked) => { const newFilter = checked ? [...tempSelectedStatuses, status] : tempSelectedStatuses.filter(s => s !== status); setTempSelectedStatuses(newFilter);}} onSelect={(e) => e.preventDefault()}> {status.charAt(0).toUpperCase() + status.slice(1)}</DropdownMenuCheckboxItem>))}
-                                </DropdownMenuContent>
+                                 <DropdownMenuTrigger asChild><Button variant="outline" className="w-full sm:w-auto"><Filter className="mr-2 h-4 w-4" />Estado</Button></DropdownMenuTrigger>
+                                 <DropdownMenuContent align="end">
+                                     <DropdownMenuLabel>Estado</DropdownMenuLabel><DropdownMenuSeparator />
+                                     {['confirmed', 'pending', 'rejected'].map(status => (<DropdownMenuCheckboxItem key={status} checked={tempSelectedStatuses.includes(status)} onCheckedChange={(checked) => { const newFilter = checked ? [...tempSelectedStatuses, status] : tempSelectedStatuses.filter(s => s !== status); setTempSelectedStatuses(newFilter);}} onSelect={(e) => e.preventDefault()}> {status.charAt(0).toUpperCase() + status.slice(1)}</DropdownMenuCheckboxItem>))}
+                                 </DropdownMenuContent>
                              </DropdownMenu>
                             {referralOptions.length > 0 && (<DropdownMenu onOpenChange={(open) => { const column = table.getColumn('referral'); if (!column) return; if (open) { setTempSelectedReferrals(column.getFilterValue() as string[] ?? []); } else { column.setFilterValue(tempSelectedReferrals.length > 0 ? tempSelectedReferrals : undefined); } }}><DropdownMenuTrigger asChild><Button variant="outline" className="w-full sm:w-auto"><Share2 className="mr-2 h-4 w-4" />Referido{selectedReferrals.length > 0 && (<><DropdownMenuSeparator orientation="vertical" className="mx-2 h-4" /><Badge variant="secondary" className="rounded-sm px-1 font-normal lg:hidden">{selectedReferrals.length}</Badge><Badge variant="secondary" className="rounded-sm px-1 font-normal hidden lg:block">{selectedReferrals.length} seleccionado(s)</Badge></>)}</Button></DropdownMenuTrigger><DropdownMenuContent align="end" className="w-[200px]"><DropdownMenuLabel>Origen de Venta</DropdownMenuLabel><DropdownMenuSeparator />{referralOptions.map(referral => (<DropdownMenuCheckboxItem key={referral} checked={tempSelectedReferrals.includes(referral)} onCheckedChange={(checked) => { const newFilter = checked ? [...tempSelectedReferrals, referral] : tempSelectedReferrals.filter(r => r !== referral); setTempSelectedReferrals(newFilter); }} onSelect={(e) => e.preventDefault()}>{referral}</DropdownMenuCheckboxItem>))}</DropdownMenuContent></DropdownMenu>)}
                             {isFiltered && (<Button variant="ghost" onClick={resetFilters} size="icon" className="h-9 w-9"><X className="h-4 w-4" /><span className="sr-only">Limpiar filtros</span></Button>)}
