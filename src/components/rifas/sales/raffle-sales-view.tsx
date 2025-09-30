@@ -1,5 +1,6 @@
 "use client";
 
+// Se añade 'useRef' para una optimización menor pero útil
 import { useState, useMemo, Fragment, useEffect } from 'react';
 import { PDFDownloadLink } from '@react-pdf/renderer';
 import { SalesPDF } from './SalesPDF';
@@ -125,6 +126,9 @@ export function RaffleSalesView({ initialSalesData }: { initialSalesData: Raffle
   const [globalFilter, setGlobalFilter] = useState('');
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [sorting, setSorting] = useState<SortingState>([{ id: 'createdAt', desc: true }]);
+  
+  // ✨ 1. Estado temporal para el filtro de referidos. Se actualiza al instante sin re-renderizar la tabla.
+  const [tempSelectedReferrals, setTempSelectedReferrals] = useState<string[]>([]);
 
   useEffect(() => { setIsClient(true); }, []);
   
@@ -142,11 +146,9 @@ export function RaffleSalesView({ initialSalesData }: { initialSalesData: Raffle
     return options;
   }, [sales]);
 
-  // ✅ --- LÓGICA DE FILTRADO COMPLETAMENTE REESCRITA PARA MÁXIMA FIABILIDAD ---
   const filteredSales = useMemo(() => {
     let filteredData = sales;
 
-    // 1. Aplicar filtro global (búsqueda)
     if (globalFilter) {
       const lowercasedFilter = globalFilter.toLowerCase();
       filteredData = filteredData.filter(sale =>
@@ -155,20 +157,16 @@ export function RaffleSalesView({ initialSalesData }: { initialSalesData: Raffle
       );
     }
 
-    // 2. Aplicar filtro de fecha
     if (date) {
       filteredData = filteredData.filter(sale => isSameDay(new Date(sale.createdAt), date));
     }
 
-    // 3. Aplicar filtros de columna (Estado, Referido)
     if (columnFilters.length > 0) {
-      // Filtro por Estado
       const statusFilter = columnFilters.find(f => f.id === 'status');
       if (statusFilter && Array.isArray(statusFilter.value) && statusFilter.value.length > 0) {
         filteredData = filteredData.filter(sale => (statusFilter.value as string[]).includes(sale.status));
       }
 
-      // Filtro por Referido
       const referralFilter = columnFilters.find(f => f.id === 'referral');
       if (referralFilter && Array.isArray(referralFilter.value) && referralFilter.value.length > 0) {
         filteredData = filteredData.filter(sale => {
@@ -328,44 +326,57 @@ export function RaffleSalesView({ initialSalesData }: { initialSalesData: Raffle
               </DropdownMenu>
 
               {referralOptions.length > 0 && (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <Button variant="outline" className="w-full sm:w-auto">
-                            <Share2 className="mr-2 h-4 w-4" />
-                            Referido
-                            {selectedReferrals.length > 0 && (
-                                <>
-                                  <DropdownMenuSeparator orientation="vertical" className="mx-2 h-4" />
-                                  <Badge variant="secondary" className="rounded-sm px-1 font-normal lg:hidden">
-                                      {selectedReferrals.length}
-                                  </Badge>
-                                  <Badge variant="secondary" className="rounded-sm px-1 font-normal hidden lg:block">
-                                      {selectedReferrals.length} seleccionado(s)
-                                  </Badge>
-                                </>
-                            )}
-                        </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-[200px]">
-                        <DropdownMenuLabel>Origen de Venta</DropdownMenuLabel>
-                        <DropdownMenuSeparator />
-                        {referralOptions.map(referral => (
-                            <DropdownMenuCheckboxItem
-                                key={referral}
-                                checked={selectedReferrals.includes(referral)}
-                                onCheckedChange={(checked) => {
-                                    const column = table.getColumn('referral');
-                                    if (!column) return;
-                                    const newFilter = checked
-                                        ? [...selectedReferrals, referral]
-                                        : selectedReferrals.filter(r => r !== referral);
-                                    column.setFilterValue(newFilter.length > 0 ? newFilter : undefined);
-                                }}
-                            >
-                                {referral}
-                            </DropdownMenuCheckboxItem>
-                        ))}
-                    </DropdownMenuContent>
+                  // ✨ 2. Se añade onOpenChange para controlar cuándo aplicar el filtro.
+                  <DropdownMenu onOpenChange={(open) => {
+                    const column = table.getColumn('referral');
+                    if (!column) return;
+
+                    if (open) {
+                      // Al abrir, se carga el estado temporal con el filtro actual de la tabla.
+                      setTempSelectedReferrals(column.getFilterValue() as string[] ?? []);
+                    } else {
+                      // Al cerrar, se aplica el filtro desde el estado temporal a la tabla.
+                      column.setFilterValue(tempSelectedReferrals.length > 0 ? tempSelectedReferrals : undefined);
+                    }
+                  }}>
+                      <DropdownMenuTrigger asChild>
+                          <Button variant="outline" className="w-full sm:w-auto">
+                              <Share2 className="mr-2 h-4 w-4" />
+                              Referido
+                              {selectedReferrals.length > 0 && (
+                                  <>
+                                      <DropdownMenuSeparator orientation="vertical" className="mx-2 h-4" />
+                                      <Badge variant="secondary" className="rounded-sm px-1 font-normal lg:hidden">
+                                          {selectedReferrals.length}
+                                      </Badge>
+                                      <Badge variant="secondary" className="rounded-sm px-1 font-normal hidden lg:block">
+                                          {selectedReferrals.length} seleccionado(s)
+                                      </Badge>
+                                  </>
+                              )}
+                          </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-[200px]">
+                          <DropdownMenuLabel>Origen de Venta</DropdownMenuLabel>
+                          <DropdownMenuSeparator />
+                          {referralOptions.map(referral => (
+                              <DropdownMenuCheckboxItem
+                                  key={referral}
+                                  // ✨ 3. El 'checked' y el 'onCheckedChange' ahora usan el estado temporal.
+                                  checked={tempSelectedReferrals.includes(referral)}
+                                  onCheckedChange={(checked) => {
+                                      const newFilter = checked
+                                          ? [...tempSelectedReferrals, referral]
+                                          : tempSelectedReferrals.filter(r => r !== referral);
+                                      setTempSelectedReferrals(newFilter);
+                                  }}
+                                  // Evita que el menú se cierre con cada clic
+                                  onSelect={(e) => e.preventDefault()}
+                              >
+                                  {referral}
+                              </DropdownMenuCheckboxItem>
+                          ))}
+                      </DropdownMenuContent>
                   </DropdownMenu>
               )}
 
@@ -410,7 +421,7 @@ export function RaffleSalesView({ initialSalesData }: { initialSalesData: Raffle
                           <TableCell>
                             <CollapsibleTrigger asChild>
                                <Button variant="ghost" size="icon">
-                                 {row.getIsExpanded() ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                                {row.getIsExpanded() ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                                </Button>
                             </CollapsibleTrigger>
                           </TableCell>
