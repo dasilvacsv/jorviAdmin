@@ -2156,3 +2156,45 @@ async function handleTop5Notifications(raffleId: string, currentPurchaseId: stri
     }
     console.log("Lógica de notificación Top 5 completada.");
 }
+
+/**
+ * Obtiene una lista de clientes únicos (por email) para exportar.
+ * Ideal para crear audiencias en Meta Ads.
+ * @returns {Promise<ActionState>} Una promesa que resuelve con la lista de clientes o un error.
+ */
+export async function exportCustomersAction(): Promise<ActionState> {
+    try {
+        // 1. Seguridad: Solo un administrador puede ejecutar esta acción.
+        await requireAdmin();
+
+        console.log("Iniciando exportación de clientes únicos...");
+
+        // 2. Consulta a la base de datos usando `selectDistinctOn` de Drizzle.
+        // Esto garantiza que solo obtengamos una fila por cada `buyerEmail` único.
+        // Ordenamos por `createdAt` descendente para obtener los datos más recientes de un cliente recurrente.
+        const customers = await db
+            .selectDistinctOn([purchases.buyerEmail], {
+                nombre: purchases.buyerName,
+                correo: purchases.buyerEmail,
+                telefono: purchases.buyerPhone,
+            })
+            .from(purchases)
+            .where(isNotNull(purchases.buyerEmail)) // Opcional: nos aseguramos de no traer nulos.
+            .orderBy(asc(purchases.buyerEmail), desc(purchases.createdAt));
+
+        console.log(`Se encontraron ${customers.length} clientes únicos.`);
+
+        // 3. Devolver los datos en el formato estándar de ActionState.
+        return {
+            success: true,
+            message: "Clientes únicos obtenidos exitosamente.",
+            data: customers,
+        };
+    } catch (error: any) {
+        console.error("Error al exportar clientes:", error);
+        return {
+            success: false,
+            message: error.message || "Ocurrió un error en el servidor al exportar los clientes.",
+        };
+    }
+}

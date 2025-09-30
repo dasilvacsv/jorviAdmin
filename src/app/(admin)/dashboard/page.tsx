@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { PlusCircle } from 'lucide-react';
 import { db } from '@/db';
+import { ExportCustomersButton } from '@/components/dashboard/ExportCustomersButton'; // Botón de exportación importado
 
 async function getDashboardData() {
     const [
@@ -87,12 +88,16 @@ export default async function DashboardPage() {
                         <p className="text-muted-foreground">Un resumen de la actividad reciente.</p>
                     </div>
                     <div className="hidden lg:block">
-                        <Link href="/rifas/nuevo">
-                            <Button className={primaryButtonClasses}>
-                                <PlusCircle className="mr-2 h-4 w-4" />
-                                Crear Nueva Rifa
-                            </Button>
-                        </Link>
+                        {/* CONTENEDOR ACTUALIZADO PARA LOS BOTONES */}
+                        <div className="flex items-center gap-2">
+                            <ExportCustomersButton />
+                            <Link href="/rifas/nuevo">
+                                <Button className={primaryButtonClasses}>
+                                    <PlusCircle className="mr-2 h-4 w-4" />
+                                    Crear Nueva Rifa
+                                </Button>
+                            </Link>
+                        </div>
                     </div>
                 </div>
                 
@@ -101,4 +106,3 @@ export default async function DashboardPage() {
         </div>
     );
 }
-

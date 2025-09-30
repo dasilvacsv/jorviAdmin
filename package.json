@@ -105,6 +105,7 @@
     "@types/react-dom": "18.2.18",
     "@types/react-google-recaptcha": "^2.1.9",
     "@types/socket.io-client": "^1.4.36",
+    "@types/xlsx": "^0.0.35",
     "pg": "^8.13.3",
     "postcss": "8.4.33",
     "tailwind-merge": "^2.6.0",
