@@ -1,9 +1,11 @@
 // app/admin/layout.tsx
-// SIN "use client";
 
-import { auth } from '@/lib/auth'; // Asegúrate de que la ruta sea correcta
+import { auth } from '@/lib/auth';
 import { redirect } from 'next/navigation';
-import { Sidebar } from '@/components/Sidebar'; // Importamos el nuevo componente
+import { Sidebar } from '@/components/Sidebar';
+import { Toaster } from "@/components/ui/toaster";
+import { NotificationProvider } from '@/contexts/NotificationContext'; // 1. Importa el Provider del contexto
+import { Header } from '@/components/Header'; // 2. Importa el nuevo Header
 
 export default async function AdminLayout({
   children,
@@ -12,21 +14,27 @@ export default async function AdminLayout({
 }) {
   const session = await auth();
 
-  // Protección de ruta en el servidor (middleware) y como fallback
   if (!session || session.user?.role !== 'admin') {
     redirect('/auth/login');
   }
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
-      <Sidebar session={session} />
-      
-      {/* Contenedor del contenido principal para que se desplace independientemente */}
-      <div className="flex-1">
-        <main className="p-6">
-          {children}
-        </main>
-      </div>
-    </div>
+    // 3. Envuelve TODO con el NotificationProvider
+    <NotificationProvider>
+        <div className="flex min-h-screen w-full flex-col bg-muted/40 md:flex-row">
+            <Sidebar session={session} />
+            
+            <div className="flex flex-1 flex-col">
+                {/* 4. Añade el Header aquí */}
+                <Header />
+                
+                <main className="flex-1 p-4 md:p-6">
+                    {children}
+                </main>
+            </div>
+            
+            <Toaster />
+        </div>
+    </NotificationProvider>
   );
 }

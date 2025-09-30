@@ -27,6 +27,7 @@ import { sendWhatsappMessage } from "@/features/whatsapp/actions";
 import { auth } from "./auth";
 import { PurchaseWithTicketsAndRaffle, RaffleSalesData } from "./types";
 import { SortingState } from "@tanstack/react-table";
+import { Purchase } from "./definitions";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -2209,4 +2210,38 @@ export async function exportCustomersAction(): Promise<ActionState> {
             message: error.message || "Ocurrió un error en el servidor al exportar los clientes.",
         };
     }
+}
+
+/**
+ * Revisa si hay compras pendientes nuevas desde la última vez que se revisó.
+ * Esta acción es llamada repetidamente por el frontend (Polling).
+ * @param lastCheckTimestamp - La fecha ISO de la última revisión.
+ * @returns Una promesa que resuelve con un array de nuevas compras pendientes.
+ */
+export async function checkForNewPurchases(lastCheckTimestamp: string): Promise<Purchase[]> {
+    try {
+        // Solo un admin puede consultar esto
+        await requireAdmin(); 
+
+        const lastCheckDate = new Date(lastCheckTimestamp);
+
+        const newPurchases = await db.query.purchases.findMany({
+            where: and(
+                eq(purchases.status, "pending"),
+                // gt (greater than) para buscar registros creados DESPUÉS de la última revisión
+                sql`${purchases.createdAt} > ${lastCheckDate}`
+            ),
+            orderBy: desc(purchases.createdAt),
+        });
+
+        // Hacemos un casting para que el tipo coincida con lo que espera el Modal.
+        // Asegúrate de que tu interfaz Purchase en el frontend coincida con la estructura de la tabla.
+        return newPurchases as Purchase[]; 
+
+    } catch (error) {
+        // En caso de error (ej. sesión expirada), no hacemos nada y devolvemos un array vacío.
+        // No queremos que un error de sesión rompa el polling en el frontend.
+        console.error("Error durante el polling de compras:", error);
+        return [];
+    }
 }

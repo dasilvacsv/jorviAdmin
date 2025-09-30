@@ -24,7 +24,6 @@ import {
     DialogTrigger,
     DialogClose,
 } from "@/components/ui/dialog";
-// --- IMPORTS DE TOOLTIP AÑADIDOS ---
 import {
     Tooltip,
     TooltipContent,
@@ -37,17 +36,17 @@ import { useFormStatus } from "react-dom";
 import {
     Check, X, Eye, Receipt, User, Mail, Phone, Ticket, DollarSign,
     CreditCard, Hash, ImageIcon, ExternalLink, Loader2, Edit, Save,
-    AlertTriangle // <-- Se mantiene para el ícono del tooltip
+    AlertTriangle
 } from "lucide-react";
 import Image from "next/image";
-import { updatePurchaseStatusAction, updatePurchaseInfoAction } from "@/lib/actions";
+import { updatePurchaseStatusAction, updatePurchaseInfoAction, getSaleDetails } from "@/lib/actions";
 import { useToast } from "@/hooks/use-toast";
 import { useFormState } from "react-dom";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
 
-interface Purchase {
+export interface Purchase {
     id: string;
     buyerName: string | null;
     buyerEmail: string;
@@ -58,10 +57,16 @@ interface Purchase {
     paymentReference: string | null;
     paymentScreenshotUrl: string | null;
     status: string;
+    raffle?: {
+        currency: 'USD' | 'VES';
+    };
 }
 
 interface PurchaseDetailsModalProps {
-    purchase: Purchase;
+    purchase?: Purchase;
+    purchaseId?: string;
+    isOpen?: boolean;
+    onClose?: () => void;
     raffleCurrency?: 'USD' | 'VES';
     isDuplicate?: boolean;
     duplicateSaleId?: string;
@@ -176,25 +181,77 @@ function CompactInfoDetail({ icon, label, value }: { icon: React.ElementType, la
 }
 
 export function PurchaseDetailsModal({
-    purchase,
-    raffleCurrency = 'USD',
+    purchase: initialPurchase,
+    purchaseId,
+    isOpen: controlledOpen,
+    onClose,
+    raffleCurrency: initialCurrency = 'USD',
     isDuplicate = false,
     duplicateSaleId,
-    similarReferences = []
+    similarReferences: initialSimilarReferences = []
 }: PurchaseDetailsModalProps) {
-    const [open, setOpen] = useState(false);
+    const [open, setOpen] = useState(controlledOpen ?? false);
     const [rejectionDialogOpen, setRejectionDialogOpen] = useState(false);
     const [rejectionReason, setRejectionReason] = useState<'invalid_payment' | 'malicious' | ''>('');
     const [rejectionComment, setRejectionComment] = useState('');
+    const [loading, setLoading] = useState(false);
 
-    const [purchaseData, setPurchaseData] = useState(purchase);
+    const [purchaseData, setPurchaseData] = useState<Purchase | null>(initialPurchase || null);
+    const [raffleCurrency, setRaffleCurrency] = useState<'USD' | 'VES'>(initialCurrency);
+    const [similarReferences, setSimilarReferences] = useState(initialSimilarReferences);
 
     const [state, formAction] = useFormState(updatePurchaseStatusAction, { success: false, message: "" });
     const { toast } = useToast();
 
     useEffect(() => {
+        if (controlledOpen !== undefined) {
+            setOpen(controlledOpen);
+        }
+    }, [controlledOpen]);
+
+    useEffect(() => {
+        const loadPurchaseData = async () => {
+            if (purchaseId && !initialPurchase) {
+                setLoading(true);
+                try {
+                    const result = await getSaleDetails(purchaseId);
+                    if (result) {
+                        setPurchaseData(result.purchase as Purchase);
+                        setRaffleCurrency(result.purchase.raffle.currency);
+                        setSimilarReferences(result.similarReferences as Purchase[]);
+                    } else {
+                        toast({
+                            title: "Error",
+                            description: "No se pudo cargar la información de la compra.",
+                            variant: "destructive",
+                        });
+                    }
+                } catch (error) {
+                    console.error("Error loading purchase:", error);
+                    toast({
+                        title: "Error",
+                        description: "Ocurrió un error al cargar los datos.",
+                        variant: "destructive",
+                    });
+                } finally {
+                    setLoading(false);
+                }
+            }
+        };
+
+        if (open) {
+            loadPurchaseData();
+        }
+    }, [open, purchaseId, initialPurchase, toast]);
+
+    useEffect(() => {
         if (state.message) {
-            setOpen(false);
+            const shouldClose = controlledOpen === undefined;
+            if (shouldClose) {
+                setOpen(false);
+            } else if (onClose) {
+                onClose();
+            }
             setRejectionDialogOpen(false);
             toast({
                 title: state.success ? "Éxito" : "Error",
@@ -206,9 +263,18 @@ export function PurchaseDetailsModal({
                 setRejectionComment('');
             }
         }
-    }, [state, toast]);
+    }, [state, toast, controlledOpen, onClose]);
+
+    const handleOpenChange = (newOpen: boolean) => {
+        if (controlledOpen === undefined) {
+            setOpen(newOpen);
+        } else if (!newOpen && onClose) {
+            onClose();
+        }
+    };
 
     const handleEmailChange = async (newEmail: string) => {
+        if (!purchaseData) return;
         const formData = new FormData();
         formData.append('purchaseId', purchaseData.id);
         formData.append('buyerEmail', newEmail);
@@ -218,10 +284,11 @@ export function PurchaseDetailsModal({
             description: result.message || (result.success ? "Email actualizado." : "No se pudo actualizar."),
             variant: result.success ? "default" : "destructive",
         });
-        if (result.success) setPurchaseData(prev => ({ ...prev, buyerEmail: newEmail }));
+        if (result.success) setPurchaseData(prev => prev ? { ...prev, buyerEmail: newEmail } : null);
     };
 
     const handlePhoneChange = async (newPhone: string) => {
+        if (!purchaseData) return;
         const formData = new FormData();
         formData.append('purchaseId', purchaseData.id);
         formData.append('buyerPhone', newPhone);
@@ -231,7 +298,7 @@ export function PurchaseDetailsModal({
             description: result.message || (result.success ? "Teléfono actualizado." : "No se pudo actualizar."),
             variant: result.success ? "default" : "destructive",
         });
-        if (result.success) setPurchaseData(prev => ({ ...prev, buyerPhone: newPhone }));
+        if (result.success) setPurchaseData(prev => prev ? { ...prev, buyerPhone: newPhone } : null);
     };
 
     const formatCurrency = (amount: string, currency: 'USD' | 'VES') => {
@@ -242,169 +309,183 @@ export function PurchaseDetailsModal({
     const isRejectButtonDisabled = !rejectionReason || (rejectionReason === 'malicious' && rejectionComment.trim() === '');
     const hasSimilarReferences = similarReferences.length > 0;
 
+    const dialogTrigger = controlledOpen === undefined ? (
+        <DialogTrigger asChild>
+            <Button variant="outline" size="sm"><Eye className="h-4 w-4 mr-2" />Ver Detalles</Button>
+        </DialogTrigger>
+    ) : null;
+
+    if (!purchaseData && !loading) {
+        return null;
+    }
+
     return (
-        <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-                <Button variant="outline" size="sm"><Eye className="h-4 w-4 mr-2" />Ver Detalles</Button>
-            </DialogTrigger>
+        <Dialog open={open} onOpenChange={handleOpenChange}>
+            {dialogTrigger}
             <DialogContent className="max-w-md sm:max-w-2xl lg:max-w-6xl w-full p-0 max-h-[90vh] flex flex-col">
                 <TooltipProvider>
-                    <DialogHeader className="p-6 pb-4 border-b flex flex-row items-center justify-between">
-                        <DialogTitle className="text-2xl flex items-center gap-3">
-                            <Receipt className="h-6 w-6 text-orange-500" />
-                            Detalles de la Compra
-                        </DialogTitle>
-                        <Button asChild variant="ghost" size="icon">
-                            <Link href={`/sale/${purchase.id}`} target="_blank" rel="noopener noreferrer">
-                                <ExternalLink className="h-5 w-5" />
-                            </Link>
-                        </Button>
-                    </DialogHeader>
+                    {loading ? (
+                        <div className="p-6 flex items-center justify-center min-h-[400px]">
+                            <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
+                        </div>
+                    ) : purchaseData ? (
+                        <>
+                            <DialogHeader className="p-6 pb-4 border-b flex flex-row items-center justify-between">
+                                <DialogTitle className="text-2xl flex items-center gap-3">
+                                    <Receipt className="h-6 w-6 text-orange-500" />
+                                    Detalles de la Compra
+                                </DialogTitle>
+                                <Button asChild variant="ghost" size="icon">
+                                    <Link href={`/sale/${purchaseData.id}`} target="_blank" rel="noopener noreferrer">
+                                        <ExternalLink className="h-5 w-5" />
+                                    </Link>
+                                </Button>
+                            </DialogHeader>
 
-                    <div className="flex-1 overflow-y-auto p-6 bg-slate-50">
-                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                            <Card className="shadow-none border border-slate-200">
-                                <CardHeader>
-                                    <CardTitle className="flex items-center gap-2 text-lg">
-                                        <User className="h-5 w-5 text-orange-500" />
-                                        Información del Comprador
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent className="space-y-1">
-                                    <CompactInfoDetail icon={User} label="Nombre" value={purchaseData.buyerName} />
-                                    <EditableInfoDetail icon={Mail} label="Email" value={purchaseData.buyerEmail} type="email" onSave={handleEmailChange} editable={true} />
-                                    <EditableInfoDetail icon={Phone} label="Teléfono" value={purchaseData.buyerPhone || ''} type="tel" onSave={handlePhoneChange} editable={true} />
-                                </CardContent>
-                            </Card>
+                            <div className="flex-1 overflow-y-auto p-6 bg-slate-50">
+                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                                    <Card className="shadow-none border border-slate-200">
+                                        <CardHeader>
+                                            <CardTitle className="flex items-center gap-2 text-lg">
+                                                <User className="h-5 w-5 text-orange-500" />
+                                                Información del Comprador
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent className="space-y-1">
+                                            <CompactInfoDetail icon={User} label="Nombre" value={purchaseData.buyerName} />
+                                            <EditableInfoDetail icon={Mail} label="Email" value={purchaseData.buyerEmail} type="email" onSave={handleEmailChange} editable={true} />
+                                            <EditableInfoDetail icon={Phone} label="Teléfono" value={purchaseData.buyerPhone || ''} type="tel" onSave={handlePhoneChange} editable={true} />
+                                        </CardContent>
+                                    </Card>
 
-                            <Card className="shadow-none border border-slate-200">
-                                <CardHeader>
-                                    <CardTitle className="flex items-center gap-2 text-lg">
-                                        <Receipt className="h-5 w-5 text-orange-500" />
-                                        Detalles de la Transacción
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent className="space-y-1">
-                                    <CompactInfoDetail icon={Ticket} label="Tickets" value={purchaseData.ticketCount} />
-                                    <CompactInfoDetail icon={DollarSign} label="Monto" value={formatCurrency(purchaseData.amount, raffleCurrency)} />
-                                    <CompactInfoDetail icon={CreditCard} label="Método" value={purchaseData.paymentMethod} />
+                                    <Card className="shadow-none border border-slate-200">
+                                        <CardHeader>
+                                            <CardTitle className="flex items-center gap-2 text-lg">
+                                                <Receipt className="h-5 w-5 text-orange-500" />
+                                                Detalles de la Transacción
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent className="space-y-1">
+                                            <CompactInfoDetail icon={Ticket} label="Tickets" value={purchaseData.ticketCount} />
+                                            <CompactInfoDetail icon={DollarSign} label="Monto" value={formatCurrency(purchaseData.amount, raffleCurrency)} />
+                                            <CompactInfoDetail icon={CreditCard} label="Método" value={purchaseData.paymentMethod} />
 
-                                    {/* --- BLOQUE DE REFERENCIA MODIFICADO CON TOOLTIP --- */}
-                                    <div className="flex items-center justify-between text-sm py-2">
-                                        <div className="flex items-center gap-2 text-slate-600">
-                                            <Hash className="h-4 w-4" />
-                                            <span>Referencia</span>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            {hasSimilarReferences ? (
-                                                <Tooltip delayDuration={100}>
-                                                    <TooltipTrigger asChild>
-                                                        <span className="font-semibold break-all text-right font-mono text-red-500 cursor-help">
+                                            <div className="flex items-center justify-between text-sm py-2">
+                                                <div className="flex items-center gap-2 text-slate-600">
+                                                    <Hash className="h-4 w-4" />
+                                                    <span>Referencia</span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    {hasSimilarReferences ? (
+                                                        <Tooltip delayDuration={100}>
+                                                            <TooltipTrigger asChild>
+                                                                <span className="font-semibold break-all text-right font-mono text-red-500 cursor-help">
+                                                                    {purchaseData.paymentReference || <span className="italic text-slate-400 font-sans">N/A</span>}
+                                                                </span>
+                                                            </TooltipTrigger>
+                                                            <TooltipContent className="border-red-300 bg-red-50 text-red-900 max-w-xs" side="top">
+                                                                <div className="flex items-start gap-2 p-1">
+                                                                    <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                                                                    <p className="font-sans text-sm">
+                                                                        Se encontraron {similarReferences.length} compra(s) con referencias que terminan en los mismos 4 dígitos ({purchaseData.paymentReference?.slice(-4)}). Verifica si no son duplicados.
+                                                                    </p>
+                                                                </div>
+                                                            </TooltipContent>
+                                                        </Tooltip>
+                                                    ) : (
+                                                        <span className={`font-semibold break-all text-right font-mono ${isDuplicate ? 'text-red-500' : 'text-slate-800'}`}>
                                                             {purchaseData.paymentReference || <span className="italic text-slate-400 font-sans">N/A</span>}
                                                         </span>
-                                                    </TooltipTrigger>
-                                                    <TooltipContent className="border-red-300 bg-red-50 text-red-900 max-w-xs" side="top">
-                                                        <div className="flex items-start gap-2 p-1">
-                                                            <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                                                            <p className="font-sans text-sm">
-                                                                Se encontraron {similarReferences.length} compra(s) con referencias que terminan en los mismos 4 dígitos ({purchaseData.paymentReference?.slice(-4)}). Verifica si no son duplicados.
-                                                            </p>
-                                                        </div>
-                                                    </TooltipContent>
-                                                </Tooltip>
-                                            ) : (
-                                                <span className={`font-semibold break-all text-right font-mono ${isDuplicate ? 'text-red-500' : 'text-slate-800'}`}>
-                                                    {purchaseData.paymentReference || <span className="italic text-slate-400 font-sans">N/A</span>}
-                                                </span>
-                                            )}
+                                                    )}
 
-                                            {isDuplicate && duplicateSaleId && (
-                                                <Button asChild variant="outline" size="sm" className="h-7 px-2">
-                                                    <Link href={`/sale/${duplicateSaleId}`} target="_blank">
-                                                        Ir a la venta
-                                                        <ExternalLink className="h-3 w-3 ml-1.5" />
-                                                    </Link>
-                                                </Button>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                </CardContent>
-                            </Card>
-
-                            <Card className="shadow-none border border-slate-200 order-first lg:order-last">
-                                <CardHeader>
-                                    <CardTitle className="flex items-center gap-2 text-lg">
-                                        <ImageIcon className="h-5 w-5 text-orange-500" />
-                                        Comprobante de Pago
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent className="space-y-4">
-                                    <div className="relative aspect-square w-full rounded-md overflow-hidden border-2 border-dashed bg-slate-100 flex items-center justify-center">
-                                        {purchaseData.paymentScreenshotUrl ? (
-                                            <Image src={purchaseData.paymentScreenshotUrl} alt="Captura de pago" fill className="object-contain" />
-                                        ) : (
-                                            <div className="text-center text-gray-500 p-4">
-                                                <ImageIcon className="h-10 w-10 mx-auto mb-2" />
-                                                <p className="text-sm">No se adjuntó imagen.</p>
+                                                    {isDuplicate && duplicateSaleId && (
+                                                        <Button asChild variant="outline" size="sm" className="h-7 px-2">
+                                                            <Link href={`/sale/${duplicateSaleId}`} target="_blank">
+                                                                Ir a la venta
+                                                                <ExternalLink className="h-3 w-3 ml-1.5" />
+                                                            </Link>
+                                                        </Button>
+                                                    )}
+                                                </div>
                                             </div>
-                                        )}
-                                    </div>
-                                    {purchaseData.paymentScreenshotUrl && (
-                                        <a href={purchaseData.paymentScreenshotUrl} target="_blank" rel="noopener noreferrer">
-                                            <Button variant="outline" className="w-full">
-                                                <ExternalLink className="h-4 w-4 mr-2" />
-                                                Ver en tamaño completo
-                                            </Button>
-                                        </a>
-                                    )}
-                                </CardContent>
-                            </Card>
-                        </div>
-                    </div>
+                                        </CardContent>
+                                    </Card>
 
-                    <DialogFooter className="p-4 border-t flex-col-reverse sm:flex-row sm:justify-end gap-2 bg-white">
-                        {purchaseData.status === 'pending' ? (
-                            <>
-                                <Dialog open={rejectionDialogOpen} onOpenChange={setRejectionDialogOpen}>
-                                    <DialogTrigger asChild><Button type="button" variant="destructive"><X className="h-4 w-4 mr-2" /> Rechazar</Button></DialogTrigger>
-                                    <DialogContent className="max-w-md">
-                                        <DialogHeader>
-                                            <DialogTitle>Motivo del Rechazo</DialogTitle>
-                                            <DialogDescription>Selecciona un motivo. Se notificará al comprador.</DialogDescription>
-                                        </DialogHeader>
-                                        <form action={formAction} className="space-y-4">
-                                            <input type="hidden" name="purchaseId" value={purchaseData.id} /><input type="hidden" name="newStatus" value="rejected" />
-                                            <RadioGroup name="rejectionReason" required value={rejectionReason} onValueChange={(v: any) => setRejectionReason(v)}>
-                                                <div className="flex items-center space-x-2"><RadioGroupItem value="invalid_payment" id="r1" /><Label htmlFor="r1">Pago inválido o incompleto</Label></div>
-                                                <div className="flex items-center space-x-2"><RadioGroupItem value="malicious" id="r2" /><Label htmlFor="r2">Actividad sospechosa o fraudulenta</Label></div>
-                                            </RadioGroup>
-                                            {rejectionReason === 'malicious' && (<Textarea placeholder="Comentario obligatorio..." id="rejectionComment" name="rejectionComment" value={rejectionComment} onChange={(e) => setRejectionComment(e.target.value)} />)}
-                                            <DialogFooter>
-                                                <DialogClose asChild><Button type="button" variant="ghost">Cancelar</Button></DialogClose>
-                                                <SubmitButton newStatus="rejected" disabled={isRejectButtonDisabled}>Rechazar y Notificar</SubmitButton>
-                                            </DialogFooter>
-                                        </form>
-                                    </DialogContent>
-                                </Dialog>
-                                <AlertDialog>
-                                    <AlertDialogTrigger asChild><Button type="button" className="w-full bg-orange-500 hover:bg-orange-600 text-white"><Check className="h-4 w-4 mr-2" /> Confirmar</Button></AlertDialogTrigger>
-                                    <AlertDialogContent>
-                                        <AlertDialogHeader><AlertDialogTitle>¿Confirmar esta compra?</AlertDialogTitle><AlertDialogDescription>Se asignarán los tickets al comprador. Esta acción no se puede deshacer.</AlertDialogDescription></AlertDialogHeader>
-                                        <AlertDialogFooter>
-                                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                            <form action={formAction} className="w-full sm:w-auto">
-                                                <input type="hidden" name="purchaseId" value={purchaseData.id} /><input type="hidden" name="newStatus" value="confirmed" />
-                                                <AlertDialogAction asChild><SubmitButton newStatus="confirmed">Sí, confirmar</SubmitButton></AlertDialogAction>
-                                            </form>
-                                        </AlertDialogFooter>
-                                    </AlertDialogContent>
-                                </AlertDialog>
-                            </>
-                        ) : (
-                            <Button variant="outline" disabled className="w-full">Compra ya {purchaseData.status === 'confirmed' ? 'confirmada' : 'rechazada'}.</Button>
-                        )}
-                    </DialogFooter>
+                                    <Card className="shadow-none border border-slate-200 order-first lg:order-last">
+                                        <CardHeader>
+                                            <CardTitle className="flex items-center gap-2 text-lg">
+                                                <ImageIcon className="h-5 w-5 text-orange-500" />
+                                                Comprobante de Pago
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent className="space-y-4">
+                                            <div className="relative aspect-square w-full rounded-md overflow-hidden border-2 border-dashed bg-slate-100 flex items-center justify-center">
+                                                {purchaseData.paymentScreenshotUrl ? (
+                                                    <Image src={purchaseData.paymentScreenshotUrl} alt="Captura de pago" fill className="object-contain" />
+                                                ) : (
+                                                    <div className="text-center text-gray-500 p-4">
+                                                        <ImageIcon className="h-10 w-10 mx-auto mb-2" />
+                                                        <p className="text-sm">No se adjuntó imagen.</p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            {purchaseData.paymentScreenshotUrl && (
+                                                <a href={purchaseData.paymentScreenshotUrl} target="_blank" rel="noopener noreferrer">
+                                                    <Button variant="outline" className="w-full">
+                                                        <ExternalLink className="h-4 w-4 mr-2" />
+                                                        Ver en tamaño completo
+                                                    </Button>
+                                                </a>
+                                            )}
+                                        </CardContent>
+                                    </Card>
+                                </div>
+                            </div>
+
+                            <DialogFooter className="p-4 border-t flex-col-reverse sm:flex-row sm:justify-end gap-2 bg-white">
+                                {purchaseData.status === 'pending' ? (
+                                    <>
+                                        <Dialog open={rejectionDialogOpen} onOpenChange={setRejectionDialogOpen}>
+                                            <DialogTrigger asChild><Button type="button" variant="destructive"><X className="h-4 w-4 mr-2" /> Rechazar</Button></DialogTrigger>
+                                            <DialogContent className="max-w-md">
+                                                <DialogHeader>
+                                                    <DialogTitle>Motivo del Rechazo</DialogTitle>
+                                                    <DialogDescription>Selecciona un motivo. Se notificará al comprador.</DialogDescription>
+                                                </DialogHeader>
+                                                <form action={formAction} className="space-y-4">
+                                                    <input type="hidden" name="purchaseId" value={purchaseData.id} /><input type="hidden" name="newStatus" value="rejected" />
+                                                    <RadioGroup name="rejectionReason" required value={rejectionReason} onValueChange={(v: any) => setRejectionReason(v)}>
+                                                        <div className="flex items-center space-x-2"><RadioGroupItem value="invalid_payment" id="r1" /><Label htmlFor="r1">Pago inválido o incompleto</Label></div>
+                                                        <div className="flex items-center space-x-2"><RadioGroupItem value="malicious" id="r2" /><Label htmlFor="r2">Actividad sospechosa o fraudulenta</Label></div>
+                                                    </RadioGroup>
+                                                    {rejectionReason === 'malicious' && (<Textarea placeholder="Comentario obligatorio..." id="rejectionComment" name="rejectionComment" value={rejectionComment} onChange={(e) => setRejectionComment(e.target.value)} />)}
+                                                    <DialogFooter>
+                                                        <DialogClose asChild><Button type="button" variant="ghost">Cancelar</Button></DialogClose>
+                                                        <SubmitButton newStatus="rejected" disabled={isRejectButtonDisabled}>Rechazar y Notificar</SubmitButton>
+                                                    </DialogFooter>
+                                                </form>
+                                            </DialogContent>
+                                        </Dialog>
+                                        <AlertDialog>
+                                            <AlertDialogTrigger asChild><Button type="button" className="w-full bg-orange-500 hover:bg-orange-600 text-white"><Check className="h-4 w-4 mr-2" /> Confirmar</Button></AlertDialogTrigger>
+                                            <AlertDialogContent>
+                                                <AlertDialogHeader><AlertDialogTitle>¿Confirmar esta compra?</AlertDialogTitle><AlertDialogDescription>Se asignarán los tickets al comprador. Esta acción no se puede deshacer.</AlertDialogDescription></AlertDialogHeader>
+                                                <AlertDialogFooter>
+                                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                    <form action={formAction} className="w-full sm:w-auto">
+                                                        <input type="hidden" name="purchaseId" value={purchaseData.id} /><input type="hidden" name="newStatus" value="confirmed" />
+                                                        <AlertDialogAction asChild><SubmitButton newStatus="confirmed">Sí, confirmar</SubmitButton></AlertDialogAction>
+                                                    </form>
+                                                </AlertDialogFooter>
+                                            </AlertDialogContent>
+                                        </AlertDialog>
+                                    </>
+                                ) : (
+                                    <Button variant="outline" disabled className="w-full">Compra ya {purchaseData.status === 'confirmed' ? 'confirmada' : 'rechazada'}.</Button>
+                                )}
+                            </DialogFooter>
+                        </>
+                    ) : null}
                 </TooltipProvider>
             </DialogContent>
         </Dialog>
