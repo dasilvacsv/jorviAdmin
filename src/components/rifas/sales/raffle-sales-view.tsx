@@ -27,6 +27,7 @@ import { ArrowLeft, Calendar as CalendarIcon, ChevronRight, DollarSign, Filter, 
 import { Raffle, PurchaseWithTicketsAndRaffle } from '@/lib/types';
 import { ColumnDef, flexRender, getCoreRowModel, useReactTable, SortingState, ColumnFiltersState, Row, ExpandedState } from "@tanstack/react-table";
 import { getPaginatedSales } from '@/lib/actions';
+import { PurchaseDetailsModal } from '../purchase-details-modal'; // ✅ BOTÓN IMPORTADO
 
 // --- Hook y Helpers ---
 function useDebounce<T>(value: T, delay: number): T {
@@ -141,7 +142,7 @@ export function RaffleSalesView({ raffle, initialData, initialTotalRowCount, ini
             sorting,
             globalFilter: debouncedGlobalFilter,
             columnFilters,
-            dateFilter: date ? format(date, 'yyyy-MM-dd') : undefined, // <-- LÍNEA MODIFICADA
+            dateFilter: date ? format(date, 'yyyy-MM-dd') : undefined,
         });
         if (result && !result.error) {
             setData(prev => (reset ? result.rows : [...prev, ...result.rows]));
@@ -267,7 +268,8 @@ export function RaffleSalesView({ raffle, initialData, initialTotalRowCount, ini
                                                     {flexRender(header.column.columnDef.header, header.getContext())}
                                                 </div>
                                             ))}
-                                            <div style={{ width: '50px' }} className="p-3"></div>
+                                            {/* ✅ ESPACIO PARA LOS BOTONES DE ACCIÓN */}
+                                            <div style={{ width: '100px' }} className="p-3"></div>
                                         </Fragment>
                                     ))}
                                 </div>
@@ -293,7 +295,9 @@ export function RaffleSalesView({ raffle, initialData, initialTotalRowCount, ini
                                                             {flexRender(cell.column.columnDef.cell, cell.getContext())}
                                                         </div>
                                                     ))}
-                                                    <div style={{ width: '50px' }} className="p-3 text-right">
+                                                    {/* ✅ BOTONES DE ACCIÓN (MODAL Y EXPANDIR) */}
+                                                    <div style={{ width: '100px' }} className="p-3 text-right flex items-center justify-end">
+                                                        <PurchaseDetailsModal purchase={rowItem.original as any} />
                                                         <Button variant="ghost" size="icon" onClick={() => rowItem.toggleExpanded()}>
                                                             <ChevronRight className={`h-4 w-4 transition-transform duration-200 ${rowItem.getIsExpanded() ? 'rotate-90' : ''}`} />
                                                         </Button>
@@ -328,9 +332,12 @@ export function RaffleSalesView({ raffle, initialData, initialTotalRowCount, ini
                                                      <div className="text-sm">
                                                          <span className="text-muted-foreground">Tickets:</span> <span className="font-bold">{sale.ticketCount}</span>
                                                      </div>
-                                                     <div className="flex items-center gap-2 text-muted-foreground text-xs">
-                                                          Ver detalles
-                                                          <ChevronRight className={`h-4 w-4 transition-transform duration-200 ${row.getIsExpanded() ? 'rotate-90' : ''}`} />
+                                                     {/* ✅ BOTÓN DEL MODAL Y EXPANDIR PARA MÓVIL */}
+                                                     <div className="flex items-center gap-1">
+                                                        <PurchaseDetailsModal purchase={sale as any} />
+                                                        <div className="text-muted-foreground">
+                                                            <ChevronRight className={`h-4 w-4 transition-transform duration-200 ${row.getIsExpanded() ? 'rotate-90' : ''}`} />
+                                                        </div>
                                                      </div>
                                                  </div>
                                              </CollapsibleTrigger>

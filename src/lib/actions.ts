@@ -34,7 +34,7 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 const PABILO_API_KEY = process.env.PABILO_API_KEY;
 const PABILO_API_URL = process.env.PABILO_API_URL;
 
-async function requireAdmin() {
+export async function requireAdmin() {
     const session = await auth();
     if (session?.user?.role !== 'admin') {
         throw new Error("Acceso denegado. Permisos de administrador requeridos.");
