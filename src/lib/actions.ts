@@ -2100,70 +2100,73 @@ async function getTopBuyersForNotifications(raffleId: string) {
     }
 }
 
-// ✅ --- NUEVA FUNCIÓN PRINCIPAL PARA LA LÓGICA DE NOTIFICACIONES DEL TOP 5 ---
 /**
- * Revisa el Top 5 después de una compra y envía notificaciones relevantes.
- * @param raffleId - El ID de la rifa afectada.
- * @param currentPurchaseId - El ID de la compra que acaba de ser confirmada.
- */
+ * Revisa el Top 5 después de una compra y envía notificaciones relevantes.
+ * @param raffleId - El ID de la rifa afectada.
+ * @param currentPurchaseId - El ID de la compra que acaba de ser confirmada.
+ */
 async function handleTop5Notifications(raffleId: string, currentPurchaseId: string) {
-    console.log(`Iniciando lógica de notificación Top 5 para la rifa ${raffleId}`);
+    console.log(`Iniciando lógica de notificación Top 5 para la rifa ${raffleId}`);
 
-    // 1. Obtener los detalles del comprador actual
-    const currentPurchase = await db.query.purchases.findFirst({
-        where: eq(purchases.id, currentPurchaseId),
-    });
-    if (!currentPurchase) {
-        console.error("No se encontró la compra para la notificación del Top 5.");
-        return;
-    }
+    // 1. Obtener los detalles del comprador actual
+    const currentPurchase = await db.query.purchases.findFirst({
+        where: eq(purchases.id, currentPurchaseId),
+    });
+    if (!currentPurchase) {
+        console.error("No se encontró la compra para la notificación del Top 5.");
+        return;
+    }
 
-    // 2. Obtener la lista actualizada del Top 5
-    const top5 = await getTopBuyersForNotifications(raffleId);
-    if (top5.length === 0) return; // No hay nadie en el top, no hacemos nada.
+    // 2. Obtener la lista actualizada del Top 5
+    const top5 = await getTopBuyersForNotifications(raffleId);
+    if (top5.length === 0) return; // No hay nadie en el top, no hacemos nada.
 
-    // 3. Encontrar la posición del comprador actual en el Top 5
-    const currentBuyerIndex = top5.findIndex(b => b.buyerEmail === currentPurchase.buyerEmail);
+    // 3. Encontrar la posición del comprador actual en el Top 5
+    const currentBuyerIndex = top5.findIndex(b => b.buyerEmail === currentPurchase.buyerEmail);
 
-    // Si el comprador actual no entró en el Top 5, terminamos la ejecución.
-    if (currentBuyerIndex === -1) {
-        console.log(`El comprador ${currentPurchase.buyerEmail} no entró en el Top 5.`);
-        return;
-    }
+    // Si el comprador actual no entró en el Top 5, terminamos la ejecución.
+    if (currentBuyerIndex === -1) {
+        console.log(`El comprador ${currentPurchase.buyerEmail} no entró en el Top 5.`);
+        return;
+    }
 
-    const currentBuyer = top5[currentBuyerIndex];
-    const leader = top5[0];
+    const currentBuyer = top5[currentBuyerIndex];
+    const leader = top5[0];
 
-    // 4. Notificar al comprador que entró al Top 5
-    if (currentBuyer.buyerEmail === leader.buyerEmail) {
-        // Mensaje si se convierte en el #1
-        const subject = "¡Felicidades! ¡Eres el número 1! 🏆";
-        const message = `¡Felicidades, ${currentBuyer.buyerName}! Has alcanzado el primer puesto en el Top 5 de compradores. ¡Sigue así para ganar el gran premio!`;
-        await sendEmail({ to: currentBuyer.buyerEmail, subject, body: `<p>${message}</p>` });
-        if (currentBuyer.buyerPhone) await sendWhatsappMessage(currentBuyer.buyerPhone, `🏆 ${message}`);
+    // 4. Notificar al comprador que entró al Top 5
+    if (currentBuyer.buyerEmail === leader.buyerEmail) {
+        // Mensaje si se convierte en el #1
+        const subject = "¡Felicidades! ¡Eres el número 1! 🏆";
+        
+        // ▼▼▼ ¡AQUÍ ESTÁ LA MODIFICACIÓN! ▼▼▼
+        const message = `¡Felicidades, ${currentBuyer.buyerName}! Has alcanzado el primer puesto en el Top 5 de compradores. ¡Sigue así para ganar el gran premio de 1000$ al primer lugar!`;
+        // ▲▲▲ FIN DE LA MODIFICACIÓN ▲▲▲
 
-    } else {
-        // Mensaje si entra al Top 5 pero no es #1
-        const ticketsToLead = leader.totalTickets - currentBuyer.totalTickets + 1;
-        const subject = "¡Has entrado al Top 5 de compradores! 🔥";
-        const message = `¡Felicidades, ${currentBuyer.buyerName}! Has entrado al Top 5. Para alcanzar el primer lugar y superar al líder, necesitas comprar ${ticketsToLead} ticket(s) más. ¡No te rindas!`;
-        await sendEmail({ to: currentBuyer.buyerEmail, subject, body: `<p>${message}</p>` });
-        if (currentBuyer.buyerPhone) await sendWhatsappMessage(currentBuyer.buyerPhone, `🔥 ${message}`);
-    }
+        await sendEmail({ to: currentBuyer.buyerEmail, subject, body: `<p>🏆 ${message}</p>` });
+        if (currentBuyer.buyerPhone) await sendWhatsappMessage(currentBuyer.buyerPhone, `🏆 ${message}`);
 
-    // 5. Notificar a los usuarios que fueron superados por el comprador actual
-    for (const otherBuyer of top5) {
-        // No nos notificamos a nosotros mismos y solo notificamos a quienes tienen menos tickets que el comprador actual
-        if (otherBuyer.buyerEmail !== currentBuyer.buyerEmail && otherBuyer.totalTickets < currentBuyer.totalTickets) {
-            const ticketsToReclaim = currentBuyer.totalTickets - otherBuyer.totalTickets + 1;
-            const subject = "¡Te han superado en el ranking! ⚔️";
-            const message = `¡Atención, ${otherBuyer.buyerName}! El comprador ${currentBuyer.buyerName} te ha superado en el ranking. Compra ${ticketsToReclaim} ticket(s) para recuperar tu posición. ¡La competencia está reñida!`;
-            
-            await sendEmail({ to: otherBuyer.buyerEmail, subject, body: `<p>${message}</p>` });
-            if (otherBuyer.buyerPhone) await sendWhatsappMessage(otherBuyer.buyerPhone, `⚔️ ${message}`);
-        }
-    }
-    console.log("Lógica de notificación Top 5 completada.");
+    } else {
+        // Mensaje si entra al Top 5 pero no es #1
+        const ticketsToLead = leader.totalTickets - currentBuyer.totalTickets + 1;
+        const subject = "¡Has entrado al Top 5 de compradores! 🔥";
+        const message = `¡Felicidades, ${currentBuyer.buyerName}! Has entrado al Top 5. Para alcanzar el primer lugar y superar al líder, necesitas comprar ${ticketsToLead} ticket(s) más. ¡No te rindas!`;
+        await sendEmail({ to: currentBuyer.buyerEmail, subject, body: `<p>${message}</p>` });
+        if (currentBuyer.buyerPhone) await sendWhatsappMessage(currentBuyer.buyerPhone, `🔥 ${message}`);
+    }
+
+    // 5. Notificar a los usuarios que fueron superados por el comprador actual
+    for (const otherBuyer of top5) {
+        // No nos notificamos a nosotros mismos y solo notificamos a quienes tienen menos tickets que el comprador actual
+        if (otherBuyer.buyerEmail !== currentBuyer.buyerEmail && otherBuyer.totalTickets < currentBuyer.totalTickets) {
+            const ticketsToReclaim = currentBuyer.totalTickets - otherBuyer.totalTickets + 1;
+            const subject = "¡Te han superado en el ranking! ⚔️";
+            const message = `¡Atención, ${otherBuyer.buyerName}! El comprador ${currentBuyer.buyerName} te ha superado en el ranking. Compra ${ticketsToReclaim} ticket(s) para recuperar tu posición. ¡La competencia está reñida!`;
+            
+            await sendEmail({ to: otherBuyer.buyerEmail, subject, body: `<p>${message}</p>` });
+            if (otherBuyer.buyerPhone) await sendWhatsappMessage(otherBuyer.buyerPhone, `⚔️ ${message}`);
+        }
+    }
+    console.log("Lógica de notificación Top 5 completada.");
 }
 
 /**
