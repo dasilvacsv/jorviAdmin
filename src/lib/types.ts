@@ -6,7 +6,7 @@ type ReferralLink = {
 } | null;
 
 // Tipos extraídos de tu schema para claridad
-type Raffle = {
+export type Raffle = {
   id: string;
   name: string;
   currency: 'USD' | 'VES';

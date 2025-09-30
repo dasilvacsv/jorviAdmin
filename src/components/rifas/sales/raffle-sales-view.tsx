@@ -19,15 +19,16 @@ import { Calendar } from '@/components/ui/calendar';
 import { Progress } from "@/components/ui/progress";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"; // ✨ Importar Tooltip
 
 // --- Icons ---
-import { ArrowLeft, Calendar as CalendarIcon, ChevronRight, DollarSign, Filter, Receipt, Search, Ticket, X, Download, Loader2, Clock, Share2 } from 'lucide-react';
+import { ArrowLeft, Calendar as CalendarIcon, ChevronRight, DollarSign, Filter, Receipt, Search, Ticket, X, Download, Loader2, Clock, Share2, Eye } from 'lucide-react'; // ✨ Importar Eye
 
 // --- Types ---
 import { Raffle, PurchaseWithTicketsAndRaffle } from '@/lib/types';
 import { ColumnDef, flexRender, getCoreRowModel, useReactTable, SortingState, ColumnFiltersState, Row, ExpandedState } from "@tanstack/react-table";
 import { getPaginatedSales } from '@/lib/actions';
-import { PurchaseDetailsModal } from '../purchase-details-modal'; // ✅ BOTÓN IMPORTADO
+import { PurchaseDetailsModal } from '../purchase-details-modal';
 
 // --- Hook y Helpers ---
 function useDebounce<T>(value: T, delay: number): T {
@@ -132,6 +133,9 @@ export function RaffleSalesView({ raffle, initialData, initialTotalRowCount, ini
     const [expanded, setExpanded] = useState<ExpandedState>({});
     const [tempSelectedStatuses, setTempSelectedStatuses] = useState<string[]>([]);
     const [tempSelectedReferrals, setTempSelectedReferrals] = useState<string[]>([]);
+
+    // ✨ 1. Añadir estado para el modal
+    const [selectedPurchase, setSelectedPurchase] = useState<PurchaseWithTicketsAndRaffle | null>(null);
 
     const fetchSales = useCallback(async (options: { pageIndex: number; pageSize: number; reset?: boolean }) => {
         setIsFetching(true);
@@ -268,7 +272,6 @@ export function RaffleSalesView({ raffle, initialData, initialTotalRowCount, ini
                                                     {flexRender(header.column.columnDef.header, header.getContext())}
                                                 </div>
                                             ))}
-                                            {/* ✅ ESPACIO PARA LOS BOTONES DE ACCIÓN */}
                                             <div style={{ width: '100px' }} className="p-3"></div>
                                         </Fragment>
                                     ))}
@@ -295,9 +298,18 @@ export function RaffleSalesView({ raffle, initialData, initialTotalRowCount, ini
                                                             {flexRender(cell.column.columnDef.cell, cell.getContext())}
                                                         </div>
                                                     ))}
-                                                    {/* ✅ BOTONES DE ACCIÓN (MODAL Y EXPANDIR) */}
+                                                    {/* ✨ 2. Reemplazar modal con un botón que actualiza el estado */}
                                                     <div style={{ width: '100px' }} className="p-3 text-right flex items-center justify-end">
-                                                        <PurchaseDetailsModal purchase={rowItem.original as any} />
+                                                        <TooltipProvider delayDuration={100}>
+                                                            <Tooltip>
+                                                                <TooltipTrigger asChild>
+                                                                    <Button variant="ghost" size="icon" onClick={() => setSelectedPurchase(rowItem.original)}>
+                                                                        <Eye className="h-4 w-4" />
+                                                                    </Button>
+                                                                </TooltipTrigger>
+                                                                <TooltipContent><p>Ver Detalles</p></TooltipContent>
+                                                            </Tooltip>
+                                                        </TooltipProvider>
                                                         <Button variant="ghost" size="icon" onClick={() => rowItem.toggleExpanded()}>
                                                             <ChevronRight className={`h-4 w-4 transition-transform duration-200 ${rowItem.getIsExpanded() ? 'rotate-90' : ''}`} />
                                                         </Button>
@@ -332,12 +344,15 @@ export function RaffleSalesView({ raffle, initialData, initialTotalRowCount, ini
                                                      <div className="text-sm">
                                                          <span className="text-muted-foreground">Tickets:</span> <span className="font-bold">{sale.ticketCount}</span>
                                                      </div>
-                                                     {/* ✅ BOTÓN DEL MODAL Y EXPANDIR PARA MÓVIL */}
+                                                     {/* ✨ 3. Reemplazar modal con un botón que actualiza el estado (móvil) */}
                                                      <div className="flex items-center gap-1">
-                                                        <PurchaseDetailsModal purchase={sale as any} />
-                                                        <div className="text-muted-foreground">
-                                                            <ChevronRight className={`h-4 w-4 transition-transform duration-200 ${row.getIsExpanded() ? 'rotate-90' : ''}`} />
-                                                        </div>
+                                                         <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); setSelectedPurchase(sale); }}>
+                                                             <Eye className="h-4 w-4 mr-2" />
+                                                             Detalles
+                                                         </Button>
+                                                         <div className="text-muted-foreground">
+                                                             <ChevronRight className={`h-4 w-4 transition-transform duration-200 ${row.getIsExpanded() ? 'rotate-90' : ''}`} />
+                                                         </div>
                                                      </div>
                                                  </div>
                                              </CollapsibleTrigger>
@@ -359,6 +374,15 @@ export function RaffleSalesView({ raffle, initialData, initialTotalRowCount, ini
                     </CardContent>
                 </Card>
             </main>
+            
+            {/* ✨ 4. Renderizar UNA SOLA instancia del modal aquí */}
+            {selectedPurchase && (
+                <PurchaseDetailsModal
+                    purchase={selectedPurchase}
+                    isOpen={!!selectedPurchase}
+                    onClose={() => setSelectedPurchase(null)}
+                />
+            )}
         </div>
     );
 }

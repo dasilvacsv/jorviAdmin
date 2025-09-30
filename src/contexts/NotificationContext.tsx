@@ -1,129 +1,113 @@
 "use client";
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { Purchase } from '@/components/rifas/purchase-details-modal';
-import { checkForNewPurchases } from '@/lib/actions';
 import { useToast } from '@/hooks/use-toast';
+import io from 'socket.io-client';
 
 interface Notification extends Purchase {
-    isRead: boolean;
+    isRead: boolean;
 }
 
 interface NotificationContextType {
-    notifications: Notification[];
-    unreadCount: number;
-    markAsRead: (id: string) => void;
-    markAllAsRead: () => void;
-    clearNotifications: () => void;
+    notifications: Notification[];
+    unreadCount: number;
+    markAsRead: (id: string) => void;
+    markAllAsRead: () => void;
+    clearNotifications: () => void;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
 
 export function useNotifications() {
-    const context = useContext(NotificationContext);
-    if (!context) {
-        throw new Error('useNotifications must be used within a NotificationProvider');
-    }
-    return context;
+    const context = useContext(NotificationContext);
+    if (!context) {
+        throw new Error('useNotifications must be used within a NotificationProvider');
+    }
+    return context;
 }
 
-const POLLING_INTERVAL_MS = 5000;
-
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
-    const [notifications, setNotifications] = useState<Notification[]>([]);
-    const lastCheckRef = useRef<string>(new Date().toISOString());
-    const [isChecking, setIsChecking] = useState(false);
-    const audioRef = useRef<HTMLAudioElement | null>(null);
-    const { toast } = useToast();
-    const originalTitleRef = useRef<string | null>(null);
-    const notificationIdsRef = useRef<Set<string>>(new Set());
+    const [notifications, setNotifications] = useState<Notification[]>([]);
+    const audioRef = useRef<HTMLAudioElement | null>(null);
+    const { toast } = useToast();
+    const originalTitleRef = useRef<string | null>(null);
+    const notificationIdsRef = useRef<Set<string>>(new Set());
 
-    const unreadCount = notifications.filter(n => !n.isRead).length;
+    const unreadCount = notifications.filter(n => !n.isRead).length;
 
-    useEffect(() => {
-        if (typeof window !== 'undefined' && originalTitleRef.current === null) {
-            originalTitleRef.current = document.title;
-        }
+    useEffect(() => {
+        if (typeof window !== 'undefined' && originalTitleRef.current === null) {
+            originalTitleRef.current = document.title;
+        }
+        const baseTitle = originalTitleRef.current || 'Jorvi Admin';
+        if (unreadCount > 0) {
+            document.title = `(${unreadCount}) ${baseTitle}`;
+        } else {
+            document.title = baseTitle;
+        }
+    }, [unreadCount]);
 
-        const baseTitle = originalTitleRef.current || 'Jorvi Admin';
+    useEffect(() => {
+        if (typeof window !== 'undefined' && !audioRef.current) {
+            audioRef.current = new Audio('/notification.mp3');
+            audioRef.current.load();
+        }
+    }, []);
 
-        if (unreadCount > 0) {
-            document.title = `(${unreadCount}) ${baseTitle}`;
-        } else {
-            document.title = baseTitle;
-        }
+    const markAsRead = useCallback((id: string) => {
+        setNotifications(prev => 
+            prev.map(n => n.id === id ? { ...n, isRead: true } : n)
+        );
+    }, []);
 
-        return () => {
-            if (originalTitleRef.current) {
-                document.title = originalTitleRef.current;
-            }
-        };
-    }, [unreadCount]);
+    const markAllAsRead = useCallback(() => {
+        setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+    }, []);
 
-    useEffect(() => {
-        if (typeof window !== 'undefined' && !audioRef.current) {
-            audioRef.current = new Audio('/notification.mp3');
-            audioRef.current.load();
-        }
-    }, []);
+    const clearNotifications = useCallback(() => {
+        setNotifications([]);
+        notificationIdsRef.current.clear();
+    }, []);
 
-    const markAsRead = useCallback((id: string) => {
-        setNotifications(prev => 
-            prev.map(n => n.id === id ? { ...n, isRead: true } : n)
-        );
-    }, []);
+    useEffect(() => {
+        // Conectar al servidor de WebSockets en tu dominio con el puerto 3001
+        const socket = io("https://llevateloconjorvi.com:3001");
 
-    const markAllAsRead = useCallback(() => {
-        setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
-    }, []);
+        socket.on("connect", () => {
+            console.log("Conectado al servidor de notificaciones.");
+        });
 
-    const clearNotifications = useCallback(() => {
-        setNotifications([]);
-        notificationIdsRef.current.clear();
-    }, []);
+        // Escucha el evento 'new-purchase' que el servidor emite
+        socket.on("new-purchase", (newPurchase: Purchase) => {
+            // Si la notificación no existe en el estado local, la añadimos.
+            if (!notificationIdsRef.current.has(newPurchase.id)) {
+                audioRef.current?.play().catch(console.error);
+                const newNotification = { ...newPurchase, isRead: false };
+                setNotifications(prev => [newNotification, ...prev]);
+                notificationIdsRef.current.add(newPurchase.id);
+                
+                toast({
+                    title: `🔔 Nuevo(s) Pago(s) Recibido(s)`,
+                    description: `${newPurchase.buyerName || 'Anónimo'} ha enviado un pago.`,
+                });
+            }
+        });
 
-    useEffect(() => {
-        const performCheck = async () => {
-            if (isChecking) return;
-            setIsChecking(true);
+        socket.on("disconnect", () => {
+            console.log("Desconectado del servidor de notificaciones.");
+        });
 
-            try {
-                const newTimestamp = new Date().toISOString();
-                const fetchedPurchases = await checkForNewPurchases(lastCheckRef.current);
-                lastCheckRef.current = newTimestamp;
+        // Limpiar la conexión cuando el componente se desmonta
+        return () => {
+            socket.disconnect();
+        };
+    }, [toast]); // Dependencia del hook useToast
 
-                if (fetchedPurchases?.length > 0) {
-                    const trulyNewPurchases = fetchedPurchases.filter(p => !notificationIdsRef.current.has(p.id));
-                    
-                    if (trulyNewPurchases.length > 0) {
-                        audioRef.current?.play().catch(console.error);
-                        
-                        const newNotifications = trulyNewPurchases.map(p => ({ ...p, isRead: false }));
-                        setNotifications(prev => [...newNotifications, ...prev]);
-                        
-                        trulyNewPurchases.forEach(p => notificationIdsRef.current.add(p.id));
-                        
-                        toast({
-                            title: `🔔 ${trulyNewPurchases.length} Nuevo(s) Pago(s) Recibido(s)`,
-                            description: `${trulyNewPurchases[0].buyerName || 'Anónimo'} ha enviado un pago.`,
-                        });
-                    }
-                }
-            } catch (error) {
-                console.error("Error en el polling de notificaciones:", error);
-            } finally {
-                setIsChecking(false);
-            }
-        };
+    const value = { notifications, unreadCount, markAsRead, markAllAsRead, clearNotifications };
 
-        const intervalId = setInterval(performCheck, POLLING_INTERVAL_MS);
-        return () => clearInterval(intervalId);
-    }, [isChecking, toast]);
-
-    const value = { notifications, unreadCount, markAsRead, markAllAsRead, clearNotifications };
-
-    return (
-        <NotificationContext.Provider value={value}>
-            {children}
-        </NotificationContext.Provider>
-    );
+    return (
+        <NotificationContext.Provider value={value}>
+            {children}
+        </NotificationContext.Provider>
+    );
 }
