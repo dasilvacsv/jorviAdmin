@@ -18,7 +18,7 @@ import {
   referralLinks,
 } from "./db/schema";
 import { revalidatePath } from "next/cache";
-import { eq, desc, inArray, and, lt, sql, like, ne, asc, or } from "drizzle-orm";
+import { eq, desc, inArray, and, lt, sql, like, ne, asc, or, isNull, isNotNull } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { uploadToS3, deleteFromS3 } from "./s3";
 import crypto from "crypto";
@@ -1670,113 +1670,148 @@ export async function getSalesDataForRaffle(raffleId: string): Promise<RaffleSal
     }
 }
 
-// Esta función se encarga de todo el trabajo pesado en el servidor.
+// =================================================================
+// ✨ FUNCIÓN MODIFICADA PARA PAGINACIÓN Y ESTADÍSTICAS ✨
+// =================================================================
 export async function getPaginatedSales(
-  raffleId: string,
-  options: {
-    pageIndex: number;
-    pageSize: number;
-    sorting: SortingState;
-    globalFilter: string;
-    columnFilters: { id: string, value: unknown }[];
-    dateFilter?: string; // Fecha en formato ISO string
-  }
+  raffleId: string,
+  options: {
+    pageIndex: number;
+    pageSize: number;
+    sorting: SortingState;
+    globalFilter: string;
+    columnFilters: { id: string; value: unknown }[];
+    dateFilter?: string; // Fecha en formato ISO string
+  }
 ) {
-  try {
-    await requireAdmin(); // Asegura permisos
+  try {
+    await requireAdmin(); // Asegura permisos
 
-    const { pageIndex, pageSize, sorting, globalFilter, columnFilters, dateFilter } = options;
+    const { pageIndex, pageSize, sorting, globalFilter, columnFilters, dateFilter } = options;
 
-    // --- 1. Construir las condiciones del WHERE dinámicamente ---
-    const conditions = [eq(purchases.raffleId, raffleId)];
+    // --- 1. Construir las condiciones del WHERE dinámicamente (Lógica sin cambios) ---
+    const conditions = [eq(purchases.raffleId, raffleId)];
+    if (globalFilter) {
+      conditions.push(or(like(purchases.buyerName, `%${globalFilter}%`), like(purchases.buyerEmail, `%${globalFilter}%`)));
+    }
+    columnFilters.forEach(filter => {
+      const { id, value } = filter;
+      if (id === 'status' && Array.isArray(value) && value.length > 0) {
+        conditions.push(inArray(purchases.status, value as ('pending' | 'confirmed' | 'rejected')[]));
+      }
+      if (id === 'referral' && Array.isArray(value) && value.length > 0) {
+        const hasDirect = value.includes('Directa');
+        const referralNames = value.filter(v => v !== 'Directa');
+        const referralConditions = [];
+        if (hasDirect) referralConditions.push(sql`${purchases.referralLinkId} IS NULL`);
+        if (referralNames.length > 0) {
+          const referralLinkIdsQuery = db.select({ id: referralLinks.id }).from(referralLinks).where(inArray(referralLinks.name, referralNames));
+          referralConditions.push(inArray(purchases.referralLinkId, referralLinkIdsQuery));
+        }
+        if (referralConditions.length > 0) conditions.push(or(...referralConditions));
+      }
+    });
+    if (dateFilter) {
+        const date = new Date(dateFilter);
+        const startOfDay = new Date(date.setHours(0, 0, 0, 0));
+        const endOfDay = new Date(date.setHours(23, 59, 59, 999));
+        conditions.push(sql`${purchases.createdAt} >= ${startOfDay} AND ${purchases.createdAt} <= ${endOfDay}`);
+    }
+    const whereClause = and(...conditions);
 
-    // Filtro global (búsqueda por nombre o email)
-    if (globalFilter) {
-      conditions.push(
-        or(
-          like(purchases.buyerName, `%${globalFilter}%`),
-          like(purchases.buyerEmail, `%${globalFilter}%`)
-        )
-      );
-    }
+    // --- 2. Construir la ordenación (ORDER BY) dinámicamente (Lógica sin cambios) ---
+    const orderBy = sorting.length > 0
+      ? sorting.map(sort => sort.desc ? desc(purchases[sort.id as keyof typeof purchases.$inferSelect]) : asc(purchases[sort.id as keyof typeof purchases.$inferSelect]))
+      : [desc(purchases.createdAt)];
 
-    // Filtros de columna (estado, referido)
-    columnFilters.forEach(filter => {
-      const { id, value } = filter;
-      if (id === 'status' && Array.isArray(value) && value.length > 0) {
-        conditions.push(inArray(purchases.status, value as ('pending' | 'confirmed' | 'rejected')[]));
-      }
-      if (id === 'referral' && Array.isArray(value) && value.length > 0) {
-        const hasDirect = value.includes('Directa');
-        const referralNames = value.filter(v => v !== 'Directa');
 
-        const referralConditions = [];
-        if (hasDirect) {
-          referralConditions.push(sql`${purchases.referralLinkId} IS NULL`);
+    // --- ✨ 3. Ejecutar las dos consultas en paralelo ---
+    const [data, statsResult] = await Promise.all([
+      // Consulta para obtener los datos de la página actual
+      db.query.purchases.findMany({
+        where: whereClause,
+        orderBy,
+        limit: pageSize,
+        offset: pageIndex * pageSize,
+        with: {
+          tickets: { columns: { ticketNumber: true } },
+          referralLink: { columns: { name: true } },
+        },
+      }),
+      // NUEVA Consulta para obtener las estadísticas totales que coinciden con los filtros
+      db.select({
+        totalSales: sql<number>`count(*)`.mapWith(Number),
+        totalRevenue: sql<number>`sum(case when ${purchases.status} = 'confirmed' then ${purchases.amount}::decimal else 0 end)`.mapWith(Number),
+        totalTicketsSold: sql<number>`sum(case when ${purchases.status} = 'confirmed' then ${purchases.ticketCount} else 0 end)`.mapWith(Number),
+        pendingRevenue: sql<number>`sum(case when ${purchases.status} = 'pending' then ${purchases.amount}::decimal else 0 end)`.mapWith(Number),
+      }).from(purchases).where(whereClause),
+    ]);
+
+    const totalRowCount = statsResult[0]?.totalSales || 0;
+    const pageCount = Math.ceil(totalRowCount / pageSize);
+
+    // ✨ Devolvemos las estadísticas junto con los datos
+    return {
+      rows: data as unknown as PurchaseWithTicketsAndRaffle[],
+      pageCount,
+      totalRowCount,
+      statistics: {
+        totalSales: totalRowCount,
+        totalRevenue: statsResult[0]?.totalRevenue || 0,
+        totalTicketsSold: statsResult[0]?.totalTicketsSold || 0,
+        pendingRevenue: statsResult[0]?.pendingRevenue || 0,
+      },
+    };
+
+  } catch (error) {
+    console.error("Error al obtener ventas paginadas:", error);
+    return {
+      rows: [],
+      pageCount: 0,
+      totalRowCount: 0,
+      statistics: { totalSales: 0, totalRevenue: 0, totalTicketsSold: 0, pendingRevenue: 0 },
+      error: "Error del servidor",
+    };
+  }
+}
+
+
+// ✨ ==========================================================
+// ✨ NUEVA FUNCIÓN PARA OBTENER OPCIONES DE FILTRO DE REFERIDOS
+// ✨ ==========================================================
+export async function getReferralOptionsForRaffle(raffleId: string): Promise<string[]> {
+    try {
+        // 1. Obtener todos los nombres de referidos únicos que tienen ventas en esta rifa
+        const referralNamesQuery = db
+            .selectDistinct({ name: referralLinks.name })
+            .from(referralLinks)
+            .innerJoin(purchases, eq(purchases.referralLinkId, referralLinks.id))
+            .where(and(eq(purchases.raffleId, raffleId), isNotNull(referralLinks.name)));
+
+        // 2. Verificar si existen ventas directas (sin referido)
+        const directSalesQuery = db
+            .select({ id: purchases.id })
+            .from(purchases)
+            .where(and(eq(purchases.raffleId, raffleId), isNull(purchases.referralLinkId)))
+            .limit(1);
+
+        const [referralNamesResult, directSalesResult] = await Promise.all([
+            referralNamesQuery,
+            directSalesQuery,
+        ]);
+
+        const options = referralNamesResult.map(r => r.name);
+        
+        // Si se encontró al menos una venta directa, añadimos la opción
+        if (directSalesResult.length > 0) {
+            options.unshift('Directa');
         }
-        if (referralNames.length > 0) {
-          // Subconsulta para obtener los IDs de los referralLinks por nombre
-          const referralLinkIdsQuery = db.select({ id: referralLinks.id }).from(referralLinks).where(inArray(referralLinks.name, referralNames));
-          referralConditions.push(inArray(purchases.referralLinkId, referralLinkIdsQuery));
-        }
-        if (referralConditions.length > 0) {
-            conditions.push(or(...referralConditions));
-        }
-      }
-    });
 
-    // Filtro de fecha
-    if (dateFilter) {
-        const date = new Date(dateFilter);
-        const startOfDay = new Date(date.setHours(0, 0, 0, 0));
-        const endOfDay = new Date(date.setHours(23, 59, 59, 999));
-        conditions.push(sql`${purchases.createdAt} >= ${startOfDay} AND ${purchases.createdAt} <= ${endOfDay}`);
+        return options.sort();
+    } catch (error) {
+        console.error("Error fetching referral options:", error);
+        return []; // Devolver array vacío en caso de error
     }
-
-    const whereClause = and(...conditions);
-
-    // --- 2. Construir la ordenación (ORDER BY) dinámicamente ---
-    const orderBy = sorting.map(sort =>
-        sort.desc ? desc(purchases[sort.id as keyof typeof purchases.$inferSelect])
-                  : asc(purchases[sort.id as keyof typeof purchases.$inferSelect])
-    );
-    // Añadir un orden por defecto para consistencia
-    if (orderBy.length === 0) {
-        orderBy.push(desc(purchases.createdAt));
-    }
-
-
-    // --- 3. Ejecutar las dos consultas en paralelo ---
-    const [data, totalCountResult] = await Promise.all([
-      // Consulta para obtener los datos de la página actual
-      db.query.purchases.findMany({
-        where: whereClause,
-        orderBy,
-        limit: pageSize,
-        offset: pageIndex * pageSize,
-        with: {
-          tickets: { columns: { ticketNumber: true } },
-          referralLink: { columns: { name: true } },
-        },
-      }),
-      // Consulta para obtener el conteo total de filas que coinciden
-      db.select({ count: sql<number>`count(*)` }).from(purchases).where(whereClause),
-    ]);
-
-    const totalRowCount = Number(totalCountResult[0].count);
-    const pageCount = Math.ceil(totalRowCount / pageSize);
-
-    return {
-      rows: data as unknown as PurchaseWithTicketsAndRaffle[],
-      pageCount,
-      totalRowCount
-    };
-
-  } catch (error) {
-    console.error("Error al obtener ventas paginadas:", error);
-    // Devuelve un estado de error para que el cliente pueda manejarlo
-    return { rows: [], pageCount: 0, totalRowCount: 0, error: "Error del servidor" };
-  }
 }
 
 export async function getSalesForRaffle(raffleId: string) {
