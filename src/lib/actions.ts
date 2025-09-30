@@ -18,14 +18,15 @@ import {
   referralLinks,
 } from "./db/schema";
 import { revalidatePath } from "next/cache";
-import { eq, desc, inArray, and, lt, sql, like, ne } from "drizzle-orm";
+import { eq, desc, inArray, and, lt, sql, like, ne, asc, or } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { uploadToS3, deleteFromS3 } from "./s3";
 import crypto from "crypto";
 import { Resend } from "resend";
 import { sendWhatsappMessage } from "@/features/whatsapp/actions";
 import { auth } from "./auth";
-import { RaffleSalesData } from "./types";
+import { PurchaseWithTicketsAndRaffle, RaffleSalesData } from "./types";
+import { SortingState } from "@tanstack/react-table";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -1667,6 +1668,115 @@ export async function getSalesDataForRaffle(raffleId: string): Promise<RaffleSal
         console.error("Error al obtener las ventas de la rifa:", error);
         return null;
     }
+}
+
+// Esta función se encarga de todo el trabajo pesado en el servidor.
+export async function getPaginatedSales(
+  raffleId: string,
+  options: {
+    pageIndex: number;
+    pageSize: number;
+    sorting: SortingState;
+    globalFilter: string;
+    columnFilters: { id: string, value: unknown }[];
+    dateFilter?: string; // Fecha en formato ISO string
+  }
+) {
+  try {
+    await requireAdmin(); // Asegura permisos
+
+    const { pageIndex, pageSize, sorting, globalFilter, columnFilters, dateFilter } = options;
+
+    // --- 1. Construir las condiciones del WHERE dinámicamente ---
+    const conditions = [eq(purchases.raffleId, raffleId)];
+
+    // Filtro global (búsqueda por nombre o email)
+    if (globalFilter) {
+      conditions.push(
+        or(
+          like(purchases.buyerName, `%${globalFilter}%`),
+          like(purchases.buyerEmail, `%${globalFilter}%`)
+        )
+      );
+    }
+
+    // Filtros de columna (estado, referido)
+    columnFilters.forEach(filter => {
+      const { id, value } = filter;
+      if (id === 'status' && Array.isArray(value) && value.length > 0) {
+        conditions.push(inArray(purchases.status, value as ('pending' | 'confirmed' | 'rejected')[]));
+      }
+      if (id === 'referral' && Array.isArray(value) && value.length > 0) {
+        const hasDirect = value.includes('Directa');
+        const referralNames = value.filter(v => v !== 'Directa');
+
+        const referralConditions = [];
+        if (hasDirect) {
+          referralConditions.push(sql`${purchases.referralLinkId} IS NULL`);
+        }
+        if (referralNames.length > 0) {
+          // Subconsulta para obtener los IDs de los referralLinks por nombre
+          const referralLinkIdsQuery = db.select({ id: referralLinks.id }).from(referralLinks).where(inArray(referralLinks.name, referralNames));
+          referralConditions.push(inArray(purchases.referralLinkId, referralLinkIdsQuery));
+        }
+        if (referralConditions.length > 0) {
+            conditions.push(or(...referralConditions));
+        }
+      }
+    });
+
+    // Filtro de fecha
+    if (dateFilter) {
+        const date = new Date(dateFilter);
+        const startOfDay = new Date(date.setHours(0, 0, 0, 0));
+        const endOfDay = new Date(date.setHours(23, 59, 59, 999));
+        conditions.push(sql`${purchases.createdAt} >= ${startOfDay} AND ${purchases.createdAt} <= ${endOfDay}`);
+    }
+
+    const whereClause = and(...conditions);
+
+    // --- 2. Construir la ordenación (ORDER BY) dinámicamente ---
+    const orderBy = sorting.map(sort =>
+        sort.desc ? desc(purchases[sort.id as keyof typeof purchases.$inferSelect])
+                  : asc(purchases[sort.id as keyof typeof purchases.$inferSelect])
+    );
+    // Añadir un orden por defecto para consistencia
+    if (orderBy.length === 0) {
+        orderBy.push(desc(purchases.createdAt));
+    }
+
+
+    // --- 3. Ejecutar las dos consultas en paralelo ---
+    const [data, totalCountResult] = await Promise.all([
+      // Consulta para obtener los datos de la página actual
+      db.query.purchases.findMany({
+        where: whereClause,
+        orderBy,
+        limit: pageSize,
+        offset: pageIndex * pageSize,
+        with: {
+          tickets: { columns: { ticketNumber: true } },
+          referralLink: { columns: { name: true } },
+        },
+      }),
+      // Consulta para obtener el conteo total de filas que coinciden
+      db.select({ count: sql<number>`count(*)` }).from(purchases).where(whereClause),
+    ]);
+
+    const totalRowCount = Number(totalCountResult[0].count);
+    const pageCount = Math.ceil(totalRowCount / pageSize);
+
+    return {
+      rows: data as unknown as PurchaseWithTicketsAndRaffle[],
+      pageCount,
+      totalRowCount
+    };
+
+  } catch (error) {
+    console.error("Error al obtener ventas paginadas:", error);
+    // Devuelve un estado de error para que el cliente pueda manejarlo
+    return { rows: [], pageCount: 0, totalRowCount: 0, error: "Error del servidor" };
+  }
 }
 
 export async function getSalesForRaffle(raffleId: string) {
