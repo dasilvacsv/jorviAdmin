@@ -9,9 +9,11 @@ import { es } from 'date-fns/locale';
 import { useDebounce } from 'use-debounce';
 import Link from 'next/link';
 
-// --- Server Action ---
-// Asumimos que esta acción existe y funciona como se espera
-// import { getPaginatedSales } from '@/lib/actions'; 
+// --- Componentes Ficticios (para que el código sea funcional) ---
+// Asegúrate de que estos imports sean correctos en tu proyecto
+import { SalesPDF } from './SalesPDF';
+import { PurchaseDetailsModal } from '../purchase-details-modal';
+// import { getPaginatedSales } from '@/lib/actions'; // Asumimos que esta server action existe y está configurada
 
 // --- UI Components ---
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -31,9 +33,8 @@ import { ArrowLeft, Calendar as CalendarIcon, ChevronDown, ChevronRight, DollarS
 // --- Types ---
 import { RaffleSalesData, PurchaseWithTicketsAndRaffle } from '@/lib/types';
 import { ColumnDef, flexRender, getCoreRowModel, useReactTable, SortingState, ColumnFiltersState, Row, PaginationState } from "@tanstack/react-table";
-import { PurchaseDetailsModal } from '../purchase-details-modal';
 
-// --- Helper Functions (sin cambios) ---
+// --- Helper Functions ---
 const formatCurrency = (amount: number | string, currency: 'USD' | 'VES') => {
   const value = typeof amount === 'string' ? parseFloat(amount) : amount;
   return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(value);
@@ -52,7 +53,7 @@ const getStatusBadge = (status: string | null) => {
   return <Badge className={`${statusMap[status as keyof typeof statusMap]} hover:bg-opacity-80`}>{textMap[status as keyof typeof textMap]}</Badge>;
 };
 
-// --- Sub-Components (sin cambios) ---
+// --- Sub-Components ---
 function StatCard({ icon: Icon, title, value, colorClass = 'text-gray-600' }: { icon: React.ElementType, title: string, value: string | number, colorClass?: string }) {
     const bgColorClass = colorClass.replace('text', 'bg').replace(/-\d+$/, '-100');
     return (
@@ -71,7 +72,7 @@ function StatCard({ icon: Icon, title, value, colorClass = 'text-gray-600' }: { 
 function SaleDetailContent({ row }: { row: Row<PurchaseWithTicketsAndRaffle> }) {
   const sale = row.original;
   const sortedTickets = useMemo(() =>
-    [...sale.tickets].sort((a, b) => a.ticketNumber.localeCompare(b.ticketNumber, undefined, { numeric: true })),
+    [...(sale.tickets || [])].sort((a, b) => a.ticketNumber.localeCompare(b.ticketNumber, undefined, { numeric: true })),
     [sale.tickets]
   );
   
@@ -83,7 +84,7 @@ function SaleDetailContent({ row }: { row: Row<PurchaseWithTicketsAndRaffle> }) 
   return (
     <div className="p-4 bg-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-4">
       <div>
-        <h4 className="font-semibold text-xs mb-2 text-gray-700 uppercase tracking-wider">Tickets ({sale.tickets.length})</h4>
+        <h4 className="font-semibold text-xs mb-2 text-gray-700 uppercase tracking-wider">Tickets ({(sale.tickets || []).length})</h4>
         {sale.status === 'pending' ? (
           <p className="text-sm text-muted-foreground italic">Los tickets se asignarán al confirmar la venta.</p>
         ) : sortedTickets.length > 0 ? (
@@ -122,8 +123,7 @@ function SaleDetailContent({ row }: { row: Row<PurchaseWithTicketsAndRaffle> }) 
   );
 }
 
-
-// --- Componente Principal REFACTORIZADO ---
+// --- Componente Principal ---
 export function RaffleSalesView({
   raffleData,
   initialData,
@@ -135,9 +135,8 @@ export function RaffleSalesView({
   initialPageCount: number;
   initialTotalRowCount: number;
 }) {
-  const { raffle, sales: allSales } = raffleData; // `allSales` se usa para estadísticas globales
+  const { raffle, sales: allSales } = raffleData;
 
-  // --- ESTADOS PARA LA GESTIÓN DE LA TABLA ---
   const [data, setData] = useState(initialData);
   const [pageCount, setPageCount] = useState(initialPageCount);
   const [totalRowCount, setTotalRowCount] = useState(initialTotalRowCount);
@@ -148,21 +147,19 @@ export function RaffleSalesView({
   const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 50 });
   const [isLoading, setIsLoading] = useState(false);
   
-  // Estados adicionales del componente original
   const [isClient, setIsClient] = useState(false);
   const [date, setDate] = useState<Date | undefined>();
   const [tempSelectedReferrals, setTempSelectedReferrals] = useState<string[]>([]);
 
-  // Debounce para el filtro global para no sobrecargar el servidor
   const [debouncedGlobalFilter] = useDebounce(globalFilter, 300);
 
-  // useEffect es el CORAZÓN de la nueva lógica de carga de datos.
   useEffect(() => {
-    // Definimos una función dummy 'getPaginatedSales' si no está disponible para evitar errores
+    // Simula la Server Action para que el código sea ejecutable de forma aislada.
+    // En tu proyecto, reemplaza esto con la importación y llamada a tu server action real.
     const getPaginatedSales = async (raffleId: string, options: any) => {
         console.log("Fetching data with options:", options);
-        // En una aplicación real, aquí iría la llamada al servidor.
-        // Simulamos una respuesta para demostración.
+        // Aquí iría la llamada a tu backend: `await getPaginatedSales(raffleId, options)`
+        // Simulamos una respuesta para demostración:
         return {
             rows: initialData,
             pageCount: initialPageCount,
@@ -172,28 +169,29 @@ export function RaffleSalesView({
 
     const fetchSales = async () => {
       setIsLoading(true);
-      const result = await getPaginatedSales(raffle.id, {
-        pageIndex: pagination.pageIndex,
-        pageSize: pagination.pageSize,
-        sorting,
-        globalFilter: debouncedGlobalFilter,
-        columnFilters,
-        // (Aquí podrías añadir el filtro de fecha si lo quieres del lado del servidor)
-        // dateFilter: date 
-      });
-
-      if (result.rows) {
-        setData(result.rows);
-        setPageCount(result.pageCount);
-        setTotalRowCount(result.totalRowCount);
+      try {
+          const result = await getPaginatedSales(raffle.id, {
+            pageIndex: pagination.pageIndex,
+            pageSize: pagination.pageSize,
+            sorting,
+            globalFilter: debouncedGlobalFilter,
+            columnFilters,
+            dateFilter: date // Envía la fecha al backend si quieres filtrar en el servidor
+          });
+    
+          setData(result.rows || []);
+          setPageCount(result.pageCount ?? 0);
+          setTotalRowCount(result.totalRowCount ?? 0);
+      } catch (error) {
+          console.error("Failed to fetch sales:", error);
+          // Opcional: manejar el estado de error en la UI
+      } finally {
+          setIsLoading(false);
       }
-      setIsLoading(false);
     };
 
-    // La carga inicial ya vino del servidor, así que solo hacemos fetch si algo cambia.
-    // El 'isClient' evita un doble fetch al montar.
     if (isClient) {
-        fetchSales();
+      fetchSales();
     }
   }, [
     raffle.id,
@@ -201,13 +199,12 @@ export function RaffleSalesView({
     sorting,
     debouncedGlobalFilter,
     columnFilters,
-    isClient // Añadido para controlar el fetch inicial
+    date, // Añadido para que el filtro de fecha dispare la búsqueda
+    isClient
   ]);
 
-  // Montaje del cliente para la renderización del PDF
   useEffect(() => { setIsClient(true); }, []);
 
-  // Opciones de referidos y estadísticas se calculan igual que antes
   const referralOptions = useMemo(() => {
     const referrals = new Set<string>();
     allSales.forEach(sale => {
@@ -223,18 +220,17 @@ export function RaffleSalesView({
   }, [allSales]);
 
   const statistics = useMemo(() => {
-    // Las estadísticas se calculan sobre el total de ventas (`allSales`)
+    // Las estadísticas globales se calculan sobre el total de ventas (`allSales`)
     const confirmedSales = allSales.filter(s => s.status === 'confirmed');
     const pendingSales = allSales.filter(s => s.status === 'pending');
     const totalRevenue = confirmedSales.reduce((acc, sale) => acc + parseFloat(sale.amount), 0);
     const totalTicketsSold = confirmedSales.reduce((acc, sale) => acc + sale.ticketCount, 0);
     const pendingRevenue = pendingSales.reduce((acc, sale) => acc + parseFloat(sale.amount), 0);
-    const totalTickets = 10000; // Asumiendo un total fijo, o usar `raffle.totalTickets`
+    const totalTickets = raffle.totalTickets || 10000;
     const progress = totalTickets > 0 ? (totalTicketsSold / totalTickets) * 100 : 0;
     return { totalSales: allSales.length, totalRevenue, totalTicketsSold, pendingRevenue, progress, totalTickets };
-  }, [allSales]);
+  }, [allSales, raffle.totalTickets]);
 
-  // Las columnas se definen igual que antes
   const columns: ColumnDef<PurchaseWithTicketsAndRaffle>[] = useMemo(() => [
     { accessorKey: 'buyerInfo', header: 'Comprador', cell: ({ row }) => {
         const sale = row.original;
@@ -275,7 +271,6 @@ export function RaffleSalesView({
     data,
     columns,
     state: { sorting, columnFilters, globalFilter, pagination },
-    // Configuración para manejo manual (en servidor)
     manualPagination: true,
     manualFiltering: true,
     manualSorting: true,
@@ -287,7 +282,6 @@ export function RaffleSalesView({
     getRowCanExpand: () => true,
   });
 
-  // --- CONFIGURACIÓN PARA VIRTUAL SCROLLING ---
   const tableContainerRef = useRef<HTMLDivElement>(null);
   const { rows } = table.getRowModel();
 
@@ -302,7 +296,7 @@ export function RaffleSalesView({
     setDate(undefined);
     setGlobalFilter('');
     setColumnFilters([]);
-    setPagination(p => ({ ...p, pageIndex: 0 })); // Regresar a la primera página
+    setPagination(p => ({ ...p, pageIndex: 0 }));
   };
   
   const selectedReferrals = (table.getColumn('referral')?.getFilterValue() as string[] ?? []);
@@ -342,13 +336,106 @@ export function RaffleSalesView({
             <CardDescription>Explora, filtra y gestiona todas las ventas.</CardDescription>
           </CardHeader>
           <CardContent>
-            {/* --- Controles de Filtro (sin cambios funcionales, solo de estado) --- */}
+            
+            {/* --- SECCIÓN DE FILTROS --- */}
             <div className="flex flex-wrap items-center gap-2 mb-4">
-               <div className="relative flex-grow min-w-[200px]">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input placeholder="Buscar por nombre o email..." value={globalFilter} onChange={(e) => setGlobalFilter(e.target.value)} className="pl-10" />
-               </div>
-               {/* ... (Aquí van tus otros filtros como Popover de Calendario y Dropdown de Estado/Referido) ... */}
+              <div className="relative flex-grow min-w-[200px]">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input placeholder="Buscar por nombre o email..." value={globalFilter} onChange={(e) => setGlobalFilter(e.target.value)} className="pl-10" />
+              </div>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="w-full sm:w-auto justify-start text-left font-normal">
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {date ? format(date, "PPP", { locale: es }) : <span>Fecha</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={date} onSelect={setDate} initialFocus /></PopoverContent>
+              </Popover>
+              
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild><Button variant="outline" className="w-full sm:w-auto"><Filter className="mr-2 h-4 w-4" />Estado</Button></DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuLabel>Filtrar por Estado</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {['confirmed', 'pending', 'rejected'].map(status => (
+                    <DropdownMenuCheckboxItem key={status} checked={(table.getColumn('status')?.getFilterValue() as string[] ?? []).includes(status)} onCheckedChange={(checked) => {
+                      const column = table.getColumn('status');
+                      if (!column) return;
+                      const currentFilter = (column.getFilterValue() as string[] ?? []);
+                      const newFilter = checked ? [...currentFilter, status] : currentFilter.filter(s => s !== status);
+                      column.setFilterValue(newFilter.length > 0 ? newFilter : undefined);
+                    }}>
+                      {status.charAt(0).toUpperCase() + status.slice(1)}
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {referralOptions.length > 0 && (
+                  <DropdownMenu onOpenChange={(open) => {
+                    const column = table.getColumn('referral');
+                    if (!column) return;
+                    if (open) {
+                      setTempSelectedReferrals(column.getFilterValue() as string[] ?? []);
+                    } else {
+                      column.setFilterValue(tempSelectedReferrals.length > 0 ? tempSelectedReferrals : undefined);
+                    }
+                  }}>
+                      <DropdownMenuTrigger asChild>
+                          <Button variant="outline" className="w-full sm:w-auto">
+                              <Share2 className="mr-2 h-4 w-4" />
+                              Origen
+                              {selectedReferrals.length > 0 && (
+                                  <>
+                                      <DropdownMenuSeparator orientation="vertical" className="mx-2 h-4" />
+                                      <Badge variant="secondary" className="rounded-sm px-1 font-normal lg:hidden">{selectedReferrals.length}</Badge>
+                                      <Badge variant="secondary" className="rounded-sm px-1 font-normal hidden lg:block">{selectedReferrals.length} seleccionado(s)</Badge>
+                                  </>
+                              )}
+                          </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-[200px]">
+                          <DropdownMenuLabel>Filtrar por Origen</DropdownMenuLabel>
+                          <DropdownMenuSeparator />
+                          {referralOptions.map(referral => (
+                              <DropdownMenuCheckboxItem
+                                  key={referral}
+                                  checked={tempSelectedReferrals.includes(referral)}
+                                  onCheckedChange={(checked) => {
+                                      const newFilter = checked
+                                          ? [...tempSelectedReferrals, referral]
+                                          : tempSelectedReferrals.filter(r => r !== referral);
+                                      setTempSelectedReferrals(newFilter);
+                                  }}
+                                  onSelect={(e) => e.preventDefault()}
+                              >
+                                  {referral}
+                              </DropdownMenuCheckboxItem>
+                          ))}
+                      </DropdownMenuContent>
+                  </DropdownMenu>
+              )}
+
+              {isFiltered && (
+                <Button variant="ghost" onClick={resetFilters} size="sm" className="h-9">
+                  <X className="h-4 w-4 mr-1" />Limpiar
+                </Button>
+              )}
+              <div className="flex-grow sm:flex-grow-0" />
+              {isClient && (
+                <PDFDownloadLink
+                  document={<SalesPDF sales={data} stats={statistics} raffle={raffle} filterDate={date} />}
+                  fileName={`reporte-ventas-${raffle.name.replace(/\s+/g, '_')}-${format(new Date(), 'yyyy-MM-dd')}.pdf`}
+                >
+                  {({ loading }) => (
+                    <Button variant="secondary" className="w-full sm:w-auto" disabled={loading}>
+                      {loading ? <Loader2 className="mr-0 sm:mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-0 sm:mr-2 h-4 w-4" />}
+                      <span className="hidden sm:inline">Exportar PDF</span>
+                    </Button>
+                  )}
+                </PDFDownloadLink>
+              )}
             </div>
 
             {/* --- TABLA VIRTUALIZADA PARA ESCRITORIO --- */}
@@ -367,9 +454,9 @@ export function RaffleSalesView({
                 </TableHeader>
                 <TableBody style={{ height: `${rowVirtualizer.getTotalSize()}px` }}>
                   {isLoading ? (
-                    <TableRow>
-                      <TableCell colSpan={columns.length} className="h-24 text-center">
-                        <div className="flex justify-center items-center gap-2 text-muted-foreground">
+                    <TableRow style={{ height: '100%' }}>
+                      <TableCell colSpan={columns.length} className="h-full">
+                        <div className="flex justify-center items-center h-full gap-2 text-muted-foreground">
                           <Loader2 className="h-5 w-5 animate-spin" />
                           <span>Cargando datos...</span>
                         </div>
@@ -377,7 +464,7 @@ export function RaffleSalesView({
                     </TableRow>
                   ) : rowVirtualizer.getVirtualItems().length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={columns.length} className="h-24 text-center">No se encontraron ventas.</TableCell>
+                      <TableCell colSpan={columns.length} className="h-24 text-center">No se encontraron ventas con los filtros actuales.</TableCell>
                     </TableRow>
                   ) : (
                     rowVirtualizer.getVirtualItems().map(virtualRow => {
@@ -392,7 +479,7 @@ export function RaffleSalesView({
                                 top: 0,
                                 left: 0,
                                 width: '100%',
-                                height: '65px', // Altura fija para la fila principal
+                                height: '65px',
                                 transform: `translateY(${virtualRow.start}px)`,
                               }}
                             >
@@ -404,12 +491,12 @@ export function RaffleSalesView({
                             </TableRow>
                             <CollapsibleContent asChild>
                                <tr style={{
-                                 position: 'absolute',
-                                 top: 0,
-                                 left: 0,
-                                 width: '100%',
-                                 transform: `translateY(${virtualRow.start + 65}px)`, // Posicionar debajo de la fila principal
-                               }}>
+                                position: 'absolute',
+                                top: 0,
+                                left: 0,
+                                width: '100%',
+                                transform: `translateY(${virtualRow.start + 65}px)`,
+                              }}>
                                 <TableCell colSpan={columns.length} className="p-0">
                                   {row.getIsExpanded() && <SaleDetailContent row={row} />}
                                 </TableCell>
@@ -424,13 +511,13 @@ export function RaffleSalesView({
               </Table>
             </div>
 
-            {/* --- VISTA DE LISTA PARA MÓVIL (del código original) --- */}
+            {/* --- VISTA DE LISTA PARA MÓVIL --- */}
             <div className="md:hidden space-y-3">
               {isLoading ? (
-                  <div className="flex justify-center items-center gap-2 text-muted-foreground py-10">
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                    <span>Cargando...</span>
-                  </div>
+                <div className="flex justify-center items-center gap-2 text-muted-foreground py-10">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  <span>Cargando...</span>
+                </div>
               ) : table.getRowModel().rows?.length ? table.getRowModel().rows.map(row => {
                 const sale = row.original;
                 return (
@@ -471,7 +558,7 @@ export function RaffleSalesView({
               )}
             </div>
 
-            {/* --- PAGINACIÓN MEJORADA --- */}
+            {/* --- PAGINACIÓN --- */}
             <div className="flex flex-col items-center justify-between gap-4 py-4 md:flex-row">
               <div className="flex-1 text-sm text-muted-foreground">
                 Mostrando {table.getRowModel().rows.length} de {totalRowCount} venta(s).
