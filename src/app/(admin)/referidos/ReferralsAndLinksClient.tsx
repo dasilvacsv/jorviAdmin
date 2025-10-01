@@ -16,9 +16,14 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"; // ✅ Importa Tabs
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { PlusCircle, Loader2, Copy, Trash2 } from "lucide-react";
+import { PlusCircle, Loader2, Copy, Trash2, Link as LinkIcon } from "lucide-react";
+
+// Importa los componentes para el diálogo y el generador de enlaces
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog";
+import { ReferralShareLinkGenerator } from "./ReferralShareLinkGenerator";
+
 
 // --- TIPOS DE DATOS ---
 type ReferralAccount = {
@@ -105,6 +110,14 @@ export function ReferralsAndLinksClient({
         toast({ title: "✅ ¡Copiado!", description: `El ${field} se copió al portapapeles.` });
     };
 
+    // Adapta los datos de rifas al formato que espera ReferralShareLinkGenerator
+    const formattedRafflesForGenerator = initialRaffles.map(raffle => ({
+        id: raffle.slug || raffle.name, // Usamos el slug o nombre como key única
+        name: raffle.name,
+        slug: raffle.slug,
+        imageUrl: null, // Asumimos que no tenemos la URL de la imagen en este componente de admin
+    }));
+
     return (
         <Tabs defaultValue="accounts" className="w-full">
             <TabsList className="grid w-full grid-cols-2">
@@ -141,7 +154,15 @@ export function ReferralsAndLinksClient({
                             <CardHeader><CardTitle>Cuentas Existentes</CardTitle></CardHeader>
                             <CardContent>
                                 <Table>
-                                    <TableHeader><TableRow><TableHead>Nombre</TableHead><TableHead>Código</TableHead><TableHead>Comisión</TableHead><TableHead className="text-center">Activo</TableHead></TableRow></TableHeader>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Nombre</TableHead>
+                                            <TableHead>Código</TableHead>
+                                            <TableHead>Comisión</TableHead>
+                                            <TableHead className="text-center">Activo</TableHead>
+                                            <TableHead className="text-right">Acciones</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
                                     <TableBody>
                                         {initialReferrals.map((ref) => (
                                             <TableRow key={ref.id}>
@@ -149,6 +170,32 @@ export function ReferralsAndLinksClient({
                                                 <TableCell><div className="font-mono flex items-center gap-2">{ref.code}<Copy className="h-3 w-3 cursor-pointer" onClick={() => handleCopy(ref.code, 'código')} /></div></TableCell>
                                                 <TableCell>${parseFloat(ref.commissionRate).toFixed(2)}</TableCell>
                                                 <TableCell className="text-center"><form action={toggleReferralStatusAction}><input type="hidden" name="id" value={ref.id} /><input type="hidden" name="currentState" value={String(ref.isActive)} /><StatusToggleButton referral={ref} /></form></TableCell>
+                                                
+                                                <TableCell className="text-right">
+                                                    <Dialog>
+                                                        <DialogTrigger asChild>
+                                                            <Button variant="outline" size="sm">
+                                                                <LinkIcon className="mr-2 h-3 w-3" />
+                                                                Generar Link
+                                                            </Button>
+                                                        </DialogTrigger>
+                                                        <DialogContent className="sm:max-w-[425px] bg-background">
+                                                            <DialogHeader>
+                                                                <DialogTitle>Generar Link para {ref.name}</DialogTitle>
+                                                                <DialogDescription>
+                                                                    Selecciona una rifa para crear el enlace de referido.
+                                                                </DialogDescription>
+                                                            </DialogHeader>
+                                                            <div className="pt-4">
+                                                                <ReferralShareLinkGenerator
+                                                                    referralCode={ref.code}
+                                                                    raffles={formattedRafflesForGenerator}
+                                                                />
+                                                            </div>
+                                                        </DialogContent>
+                                                    </Dialog>
+                                                </TableCell>
+
                                             </TableRow>
                                         ))}
                                     </TableBody>
