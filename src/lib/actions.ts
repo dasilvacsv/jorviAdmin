@@ -1542,82 +1542,111 @@ export async function createReferralLinkAction(prevState: ActionState, formData:
     }
 }
 
-// Define los tipos de datos que devolverá la función
+// ✅ AÑADIDO: Un tipo más explícito para nuestras analíticas
 type SellerAnalytics = {
-    sellerName: string;
-    totalSales: number;
-    confirmedSales: number;
-    totalTickets: number;
-    confirmedTickets: number;
-    totalRevenue: number;
-    confirmedRevenue: number;
+    sellerName: string;
+    // ✅ AÑADIDO: 'type' para diferenciar en el frontend
+    type: 'personal' | 'link' | 'direct'; 
+    totalSales: number;
+    confirmedSales: number;
+    totalTickets: number;
+    confirmedTickets: number;
+    totalRevenue: number;
+    confirmedRevenue: number;
 };
 
-// --- ¡NUEVO! ACTION PARA OBTENER ANALÍTICAS DE REFERIDOS POR RIFA ---
+
 export async function getReferralAnalyticsForRaffle(raffleId: string) {
-    await requireAdmin();
-    try {
-        const raffle = await db.query.raffles.findFirst({
-            where: eq(raffles.id, raffleId),
-            columns: { id: true, name: true, price: true, currency: true }
-        });
+    await requireAdmin();
+    try {
+        const raffle = await db.query.raffles.findFirst({
+            where: eq(raffles.id, raffleId),
+            columns: { id: true, name: true, price: true, currency: true }
+        });
 
-        if (!raffle) {
-            return { success: false, message: "Rifa no encontrada." };
-        }
+        if (!raffle) {
+            return { success: false, message: "Rifa no encontrada." };
+        }
 
-        const sales = await db.query.purchases.findMany({
-            where: eq(purchases.raffleId, raffleId),
-            columns: { status: true, ticketCount: true, amount: true },
-            with: {
-                referralLink: {
-                    columns: { name: true, code: true }
-                }
-            }
-        });
-        
-        const analyticsMap = new Map<string, SellerAnalytics>();
-        analyticsMap.set('direct', {
-            sellerName: 'Ventas Directas (Sin Referido)',
-            totalSales: 0, confirmedSales: 0, totalTickets: 0,
-            confirmedTickets: 0, totalRevenue: 0, confirmedRevenue: 0,
-        });
+        // ✅ CAMBIO: Hacemos join con 'referral' (vendedores) y 'referralLink' (campañas)
+        const sales = await db.query.purchases.findMany({
+            where: eq(purchases.raffleId, raffleId),
+            columns: { status: true, ticketCount: true, amount: true },
+            with: {
+                referralLink: { // Para links de campaña (ej. Meta)
+                    columns: { id: true, name: true }
+                },
+                referral: { // Para vendedores personales con cuenta
+                    columns: { id: true, name: true }
+                }
+            }
+        });
+        
+        // Usamos un Map para agrupar los datos eficientemente
+        const analyticsMap = new Map<string, SellerAnalytics>();
 
-        for (const sale of sales) {
-            const key = sale.referralLink?.code || 'direct';
-            const name = sale.referralLink?.name || 'Ventas Directas (Sin Referido)';
+        // Procesamos cada venta para asignarla al grupo correcto
+        for (const sale of sales) {
+            let key: string;
+            let name: string;
+            let type: 'personal' | 'link' | 'direct';
 
-            if (!analyticsMap.has(key)) {
-                analyticsMap.set(key, {
-                    sellerName: name,
-                    totalSales: 0, confirmedSales: 0, totalTickets: 0,
-                    confirmedTickets: 0, totalRevenue: 0, confirmedRevenue: 0,
-                });
-            }
+            // ✅ LÓGICA DE PRIORIDAD:
+            // 1. Si existe un referido personal (referralId), se le da prioridad.
+            if (sale.referral) {
+                key = `personal-${sale.referral.id}`;
+                name = sale.referral.name;
+                type = 'personal';
+            } 
+            // 2. Si no, se busca un link de campaña (referralLinkId).
+            else if (sale.referralLink) {
+                key = `link-${sale.referralLink.id}`;
+                name = sale.referralLink.name;
+                type = 'link';
+            } 
+            // 3. Si no hay ninguno, es una venta directa.
+            else {
+                key = 'direct';
+                name = 'Ventas Directas (Sin Referido)';
+                type = 'direct';
+            }
 
-            const stats = analyticsMap.get(key)!;
-            const saleAmount = parseFloat(sale.amount);
+            // Si es la primera vez que vemos este referido/link/directo, inicializamos sus estadísticas.
+            if (!analyticsMap.has(key)) {
+                analyticsMap.set(key, {
+                    sellerName: name,
+                    type: type, // Guardamos el tipo para usarlo en el frontend
+                    totalSales: 0, confirmedSales: 0, totalTickets: 0,
+                    confirmedTickets: 0, totalRevenue: 0, confirmedRevenue: 0,
+                });
+            }
 
-            stats.totalSales += 1;
-            stats.totalTickets += sale.ticketCount;
-            stats.totalRevenue += saleAmount;
+            const stats = analyticsMap.get(key)!;
+            const saleAmount = parseFloat(sale.amount);
 
-            if (sale.status === 'confirmed') {
-                stats.confirmedSales += 1;
-                stats.confirmedTickets += sale.ticketCount;
-                stats.confirmedRevenue += saleAmount;
-            }
-        }
-        
-        const analytics = Array.from(analyticsMap.values())
-                               .sort((a, b) => b.confirmedRevenue - a.confirmedRevenue);
+            // Acumulamos las estadísticas totales
+            stats.totalSales += 1;
+            stats.totalTickets += sale.ticketCount;
+            stats.totalRevenue += saleAmount;
 
-        return { success: true, data: { raffle, analytics } };
+            // Acumulamos las estadísticas solo si la venta está confirmada
+            if (sale.status === 'confirmed') {
+                stats.confirmedSales += 1;
+                stats.confirmedTickets += sale.ticketCount;
+                stats.confirmedRevenue += saleAmount;
+            }
+        }
+        
+        // Convertimos el Map a un array y lo ordenamos por ingresos confirmados
+        const analytics = Array.from(analyticsMap.values())
+                               .sort((a, b) => b.confirmedRevenue - a.confirmedRevenue);
 
-    } catch (error) {
-        console.error("Error obteniendo analíticas:", error);
-        return { success: false, message: "Error del servidor." };
-    }
+        return { success: true, data: { raffle, analytics } };
+
+    } catch (error) {
+        console.error("Error obteniendo analíticas:", error);
+        return { success: false, message: "Error del servidor." };
+    }
 }
 
 
