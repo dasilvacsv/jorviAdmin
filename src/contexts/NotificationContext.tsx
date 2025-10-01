@@ -50,6 +50,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     const [connectionStatus, setConnectionStatus] = useState<'connected' | 'connecting' | 'error'>('connecting');
     
     const audioRef = useRef<HTMLAudioElement | null>(null);
+    const specialAudioRef = useRef<HTMLAudioElement | null>(null); // ✅ 1. NUEVA REFERENCIA
     const { toast } = useToast();
     const originalTitleRef = useRef<string | null>(null);
     const lastCheckRef = useRef<Date>(new Date());
@@ -75,10 +76,18 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
     // Cargar audio de notificación
     useEffect(() => {
-        if (typeof window !== 'undefined' && !audioRef.current) {
-            audioRef.current = new Audio('/notification.mp3');
-            audioRef.current.volume = 0.7;
-            audioRef.current.load();
+        if (typeof window !== 'undefined') {
+            if (!audioRef.current) {
+                audioRef.current = new Audio('/notification.mp3');
+                audioRef.current.volume = 0.7;
+                audioRef.current.load();
+            }
+            // ✅ 2. CARGAR EL NUEVO AUDIO
+            if (!specialAudioRef.current) {
+                specialAudioRef.current = new Audio('/gasolina.mp3');
+                specialAudioRef.current.volume = 0.7;
+                specialAudioRef.current.load();
+            }
         }
     }, []);
 
@@ -112,14 +121,19 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
             if (newPurchases && newPurchases.length > 0) {
                 console.log(`Encontradas ${newPurchases.length} nuevas compras pendientes`);
                 
-                // Filtrar solo las compras que no hemos visto antes
                 const trulyNewPurchases = newPurchases.filter(
                     purchase => !notificationIdsRef.current.has(purchase.id)
                 );
 
                 if (trulyNewPurchases.length > 0) {
-                    // Reproducir sonido de notificación
-                    audioRef.current?.play().catch(console.error);
+                    // ✅ 3. LÓGICA PARA ELEGIR EL SONIDO
+                    const hasSpecialPurchase = trulyNewPurchases.some(p => p.ticketCount > 5);
+
+                    if (hasSpecialPurchase) {
+                        specialAudioRef.current?.play().catch(console.error);
+                    } else {
+                        audioRef.current?.play().catch(console.error);
+                    }
 
                     // Agregar nuevas notificaciones
                     const newNotifications = trulyNewPurchases.map(purchase => ({
@@ -150,7 +164,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         } catch (error) {
             console.error('Error al verificar nuevas compras:', error);
             setConnectionStatus('error');
-            // En caso de error, pausamos el polling por 30 segundos
             setTimeout(() => {
                 lastCheckRef.current = new Date();
                 setConnectionStatus('connecting');
@@ -179,10 +192,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
             return;
         }
 
-        // Verificación inicial
         checkForUpdates();
-
-        // Configurar intervalo de polling cada 10 segundos
         pollingIntervalRef.current = setInterval(checkForUpdates, 10000);
 
         return () => {
