@@ -495,7 +495,7 @@ async function sendConfirmationWhatsapp(purchaseId: string): Promise<void> {
     return;
   }
   
-  const text = `¡Hola, ${purchase.buyerName}! 👋\n\nRecibimos tu solicitud de compra para la rifa *${purchase.raffle.name}*. \n\nTu pago está siendo verificado. Te notificaremos por aquí y por correo una vez que sea aprobado. ¡Gracias por participar!`;
+  const text = `¡Hola, ${purchase.buyerName}! 👋\n\nRecibimos tu solicitud de compra para la rifa *${purchase.raffle.name}*. \n\nTu pago está siendo verificado. Te notificaremos por aquí una vez que sea aprobado. ¡Gracias por participar!`;
 
   try {
     console.log(`Intentando enviar WhatsApp de confirmación a: ${purchase.buyerPhone}`);
