@@ -19,10 +19,10 @@ import { Calendar } from '@/components/ui/calendar';
 import { Progress } from "@/components/ui/progress";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"; // ✨ Importar Tooltip
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 // --- Icons ---
-import { ArrowLeft, Calendar as CalendarIcon, ChevronRight, DollarSign, Filter, Receipt, Search, Ticket, X, Download, Loader2, Clock, Share2, Eye } from 'lucide-react'; // ✨ Importar Eye
+import { ArrowLeft, Calendar as CalendarIcon, ChevronRight, DollarSign, Filter, Receipt, Search, Ticket, X, Download, Loader2, Clock, Share2, Eye } from 'lucide-react';
 
 // --- Types ---
 import { Raffle, PurchaseWithTicketsAndRaffle } from '@/lib/types';
@@ -134,7 +134,6 @@ export function RaffleSalesView({ raffle, initialData, initialTotalRowCount, ini
     const [tempSelectedStatuses, setTempSelectedStatuses] = useState<string[]>([]);
     const [tempSelectedReferrals, setTempSelectedReferrals] = useState<string[]>([]);
 
-    // ✨ 1. Añadir estado para el modal
     const [selectedPurchase, setSelectedPurchase] = useState<PurchaseWithTicketsAndRaffle | null>(null);
 
     const fetchSales = useCallback(async (options: { pageIndex: number; pageSize: number; reset?: boolean }) => {
@@ -159,16 +158,40 @@ export function RaffleSalesView({ raffle, initialData, initialTotalRowCount, ini
     useEffect(() => { fetchSales({ pageIndex: 0, pageSize: 50, reset: true }); }, [sorting, debouncedGlobalFilter, columnFilters, date, fetchSales]);
 
     const columns: ColumnDef<PurchaseWithTicketsAndRaffle>[] = useMemo(() => [
-        { accessorKey: 'buyerInfo', header: 'Comprador', size: 250, cell: ({ row }) => {
-            const sale = row.original;
-            return (<div><div className="font-medium text-slate-900 truncate">{sale.buyerName || 'N/A'}</div><div className="text-xs text-muted-foreground truncate">{sale.buyerEmail}</div></div>);
-        }},
+        { 
+            accessorKey: 'buyerInfo', 
+            header: 'Comprador', 
+            size: 250, 
+            cell: ({ row }) => {
+                const sale = row.original;
+                return (<div><div className="font-medium text-slate-900 truncate">{sale.buyerName || 'N/A'}</div><div className="text-xs text-muted-foreground truncate">{sale.buyerEmail}</div></div>);
+            }
+        },
         { accessorKey: 'status', header: 'Estado', size: 120, cell: ({ row }) => getStatusBadge(row.getValue("status")) },
         { accessorKey: 'createdAt', header: 'Fecha', size: 160, cell: ({ row }) => format(new Date(row.getValue("createdAt")), "dd MMM yy, hh:mm a", { locale: es }), sortingFn: 'datetime' },
-        { id: 'referral', accessorFn: row => row.referralLink?.name || 'Directa', header: 'Origen', size: 130, cell: ({ row }) => {
-            const referralName = row.original.referralLink?.name;
-            return (<div className="flex items-center gap-2"><Share2 className={`h-3 w-3 ${referralName ? 'text-blue-500' : 'text-gray-400'}`} />{referralName ? <span className="text-xs font-medium">{referralName}</span> : <span className="text-xs text-muted-foreground italic">Directa</span>}</div>);
-        }},
+        
+        // ✨ COLUMNA MODIFICADA
+        { 
+            id: 'referral', 
+            // El accessor ahora unifica el nombre desde cualquiera de las dos fuentes.
+            accessorFn: row => row.referral?.name || row.referralLink?.name || 'Directa',
+            header: 'Origen', 
+            size: 130, 
+            cell: ({ row }) => {
+                // La lógica de renderizado ahora solo se basa en si hay un nombre o no.
+                const referralName = row.original.referral?.name || row.original.referralLink?.name;
+                return (
+                    <div className="flex items-center gap-2">
+                        <Share2 className={`h-3 w-3 ${referralName ? 'text-blue-500' : 'text-gray-400'}`} />
+                        {referralName 
+                            ? <span className="text-xs font-medium">{referralName}</span> 
+                            : <span className="text-xs text-muted-foreground italic">Directa</span>
+                        }
+                    </div>
+                );
+            }
+        },
+
         { accessorKey: 'ticketCount', header: 'Tickets', size: 80, cell: ({ row }) => <div className="text-center font-bold">{row.getValue("ticketCount")}</div> },
         { accessorKey: 'amount', header: 'Monto', size: 120, cell: ({ row }) => <div className="font-semibold">{formatCurrency(row.getValue("amount"), raffle.currency)}</div> },
     ], [raffle.currency]);
@@ -298,7 +321,6 @@ export function RaffleSalesView({ raffle, initialData, initialTotalRowCount, ini
                                                             {flexRender(cell.column.columnDef.cell, cell.getContext())}
                                                         </div>
                                                     ))}
-                                                    {/* ✨ 2. Reemplazar modal con un botón que actualiza el estado */}
                                                     <div style={{ width: '100px' }} className="p-3 text-right flex items-center justify-end">
                                                         <TooltipProvider delayDuration={100}>
                                                             <Tooltip>
@@ -344,7 +366,6 @@ export function RaffleSalesView({ raffle, initialData, initialTotalRowCount, ini
                                                      <div className="text-sm">
                                                          <span className="text-muted-foreground">Tickets:</span> <span className="font-bold">{sale.ticketCount}</span>
                                                      </div>
-                                                     {/* ✨ 3. Reemplazar modal con un botón que actualiza el estado (móvil) */}
                                                      <div className="flex items-center gap-1">
                                                          <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); setSelectedPurchase(sale); }}>
                                                              <Eye className="h-4 w-4 mr-2" />
@@ -375,7 +396,6 @@ export function RaffleSalesView({ raffle, initialData, initialTotalRowCount, ini
                 </Card>
             </main>
             
-            {/* ✨ 4. Renderizar UNA SOLA instancia del modal aquí */}
             {selectedPurchase && (
                 <PurchaseDetailsModal
                     purchase={selectedPurchase}

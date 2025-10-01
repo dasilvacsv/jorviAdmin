@@ -41,6 +41,7 @@ export type PurchaseWithTicketsAndRaffle = Purchase & {
   raffle: Raffle;
   // --- RELACIÓN AÑADIDA ---
   referralLink: ReferralLink;
+  referral?: { name: string } | null;
 };
 
 export type RaffleSalesData = {
