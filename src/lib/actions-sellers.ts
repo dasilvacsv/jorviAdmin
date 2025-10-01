@@ -3,7 +3,7 @@
 
 import { z } from "zod";
 import { db } from "./db";
-import { systemSettings, raffleExchangeRates, raffles } from "./db/schema";
+import { systemSettings, raffleExchangeRates, raffles, referrals } from "./db/schema";
 import { revalidatePath } from "next/cache";
 import { eq, desc, inArray } from "drizzle-orm";
 import { auth } from "./auth";
@@ -61,21 +61,42 @@ export async function updateSystemSettingAction(
   const { key, value, description } = validatedFields.data;
 
   try {
-    const existing = await db.query.systemSettings.findFirst({
-      where: eq(systemSettings.key, key),
+    // ✅ USA UNA TRANSACCIÓN PARA GARANTIZAR LA INTEGRIDAD DE LOS DATOS
+    await db.transaction(async (tx) => {
+      // 1. Busca la configuración existente
+      const existing = await tx.query.systemSettings.findFirst({
+        where: eq(systemSettings.key, key),
+      });
+
+      // 2. Actualiza o inserta la configuración del sistema
+      if (existing) {
+        await tx
+          .update(systemSettings)
+          .set({ value, description, updatedAt: new Date() })
+          .where(eq(systemSettings.key, key));
+      } else {
+        await tx.insert(systemSettings).values({ key, value, description });
+      }
+
+      // 3. ✨ LÓGICA AÑADIDA: SI LA CLAVE ES LA COMISIÓN, ACTUALIZA TODOS LOS REFERIDOS
+      if (key === 'commission_rate') {
+        // Actualiza la columna `commissionRate` para TODAS las filas de la tabla `referrals`.
+        // No se usa .where() para que el cambio sea global.
+        await tx
+          .update(referrals)
+          .set({ commissionRate: value });
+      }
     });
 
-    if (existing) {
-      await db
-        .update(systemSettings)
-        .set({ value, description, updatedAt: new Date() })
-        .where(eq(systemSettings.key, key));
-    } else {
-      await db.insert(systemSettings).values({ key, value, description });
-    }
-
     revalidatePath("/admin/settings");
-    return { success: true, message: "Configuración actualizada exitosamente." };
+    
+    // Cambia el mensaje para reflejar que ambas cosas se actualizaron si fue el caso
+    const message = key === 'commission_rate' 
+      ? "Configuración y comisiones de referidos actualizadas exitosamente." 
+      : "Configuración actualizada exitosamente.";
+      
+    return { success: true, message };
+
   } catch (error) {
     console.error("Error al actualizar configuración:", error);
     return { success: false, message: "Error al actualizar la configuración." };
