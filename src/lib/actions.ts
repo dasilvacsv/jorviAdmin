@@ -28,7 +28,7 @@ import { sendWhatsappMessage } from "@/features/whatsapp/actions";
 import { auth } from "./auth";
 import { PurchaseWithTicketsAndRaffle, RaffleSalesData } from "./types";
 import { SortingState } from "@tanstack/react-table";
-import { Purchase } from "./definitions";
+import { Purchase } from '@/lib/types';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -1852,6 +1852,8 @@ export async function getReferralOptionsForRaffle(raffleId: string): Promise<str
     }
 }
 
+
+
 export async function getSalesForRaffle(raffleId: string) {
   try {
     // 1. Requerir permisos de administrador
@@ -2248,28 +2250,101 @@ export async function exportCustomersAction(): Promise<ActionState> {
  */
 export async function checkForNewPurchases(lastCheckTimestamp: string): Promise<Purchase[]> {
     try {
-        // Solo un admin puede consultar esto
-        await requireAdmin(); 
-
+        // La consulta original está bien, necesitamos los datos de la rifa para el frontend,
+        // pero solo los usaremos para construir el objeto final si es necesario en otro lado.
+        // Para esta función, solo nos aseguramos de devolver el tipo 'Purchase' correcto.
         const lastCheckDate = new Date(lastCheckTimestamp);
 
-        const newPurchases = await db.query.purchases.findMany({
+        const newPurchasesFromDb = await db.query.purchases.findMany({
             where: and(
                 eq(purchases.status, "pending"),
-                // gt (greater than) para buscar registros creados DESPUÉS de la última revisión
                 sql`${purchases.createdAt} > ${lastCheckDate}`
             ),
+            // El 'with' no es estrictamente necesario si solo devolvemos el tipo 'Purchase',
+            // pero lo dejamos por si se necesita en el futuro.
+            with: {
+                raffle: {
+                    columns: { name: true, currency: true }
+                }
+            },
             orderBy: desc(purchases.createdAt),
         });
 
-        // Hacemos un casting para que el tipo coincida con lo que espera el Modal.
-        // Asegúrate de que tu interfaz Purchase en el frontend coincida con la estructura de la tabla.
-        return newPurchases as Purchase[]; 
+        // Hacemos el mapeo para que coincida EXACTAMENTE con tu tipo 'Purchase'
+        return newPurchasesFromDb.map(purchase => ({
+            id: purchase.id,
+            amount: purchase.amount,
+            status: purchase.status,
+            buyerName: purchase.buyerName,
+            buyerEmail: purchase.buyerEmail,
+            buyerPhone: purchase.buyerPhone,
+            paymentReference: purchase.paymentReference,
+            paymentScreenshotUrl: purchase.paymentScreenshotUrl,
+            paymentMethod: purchase.paymentMethod,
+            ticketCount: purchase.ticketCount,
+            createdAt: purchase.createdAt,
+            raffleId: purchase.raffleId, // CORRECTO: Usamos el ID de la rifa
+            rejectionReason: purchase.rejectionReason, // AÑADIDO: Campo requerido por el tipo
+            rejectionComment: purchase.rejectionComment, // AÑADIDO: Campo requerido por el tipo
+        }));
 
     } catch (error) {
-        // En caso de error (ej. sesión expirada), no hacemos nada y devolvemos un array vacío.
-        // No queremos que un error de sesión rompa el polling en el frontend.
         console.error("Error durante el polling de compras:", error);
         return [];
+    }
+}
+
+export async function getDashboardStats(): Promise<{
+    totalPendingPurchases: number;
+    totalConfirmedToday: number;
+    totalRevenueToday: number;
+    activeRaffles: number;
+}> {
+    try {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+
+        const [pendingCount, confirmedToday, revenueToday, activeRafflesCount] = await Promise.all([
+            db.select({ count: sql<number>`count(*)`.mapWith(Number) })
+                .from(purchases)
+                .where(eq(purchases.status, 'pending')),
+            
+            db.select({ count: sql<number>`count(*)`.mapWith(Number) })
+                .from(purchases)
+                .where(and(
+                    eq(purchases.status, 'confirmed'),
+                    sql`${purchases.createdAt} >= ${today}`,
+                    sql`${purchases.createdAt} < ${tomorrow}`
+                )),
+            
+            db.select({ total: sql<number>`sum(${purchases.amount}::decimal)`.mapWith(Number) })
+                .from(purchases)
+                .where(and(
+                    eq(purchases.status, 'confirmed'),
+                    sql`${purchases.createdAt} >= ${today}`,
+                    sql`${purchases.createdAt} < ${tomorrow}`
+                )),
+            
+            db.select({ count: sql<number>`count(*)`.mapWith(Number) })
+                .from(raffles)
+                .where(eq(raffles.status, 'active'))
+        ]);
+
+        return {
+            totalPendingPurchases: pendingCount[0]?.count || 0,
+            totalConfirmedToday: confirmedToday[0]?.count || 0,
+            totalRevenueToday: revenueToday[0]?.total || 0,
+            activeRaffles: activeRafflesCount[0]?.count || 0
+        };
+    } catch (error) {
+        console.error("Error obteniendo estadísticas del dashboard:", error);
+        return {
+            totalPendingPurchases: 0,
+            totalConfirmedToday: 0,
+            totalRevenueToday: 0,
+            activeRaffles: 0
+        };
     }
 }

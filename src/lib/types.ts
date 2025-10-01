@@ -17,7 +17,7 @@ type Ticket = {
   ticketNumber: string;
 };
 
-type Purchase = {
+export type Purchase = {
   id: string;
   amount: string;
   status: 'pending' | 'confirmed' | 'rejected';
