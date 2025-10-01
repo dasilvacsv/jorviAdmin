@@ -22,7 +22,8 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 // --- Icons ---
-import { ArrowLeft, Calendar as CalendarIcon, ChevronRight, DollarSign, Filter, Receipt, Search, Ticket, X, Download, Loader2, Clock, Share2, Eye } from 'lucide-react';
+// ✨ 1. Importar el ícono 'User'
+import { ArrowLeft, Calendar as CalendarIcon, ChevronRight, DollarSign, Filter, Receipt, Search, Ticket, X, Download, Loader2, Clock, Share2, Eye, User } from 'lucide-react';
 
 // --- Types ---
 import { Raffle, PurchaseWithTicketsAndRaffle } from '@/lib/types';
@@ -170,19 +171,23 @@ export function RaffleSalesView({ raffle, initialData, initialTotalRowCount, ini
         { accessorKey: 'status', header: 'Estado', size: 120, cell: ({ row }) => getStatusBadge(row.getValue("status")) },
         { accessorKey: 'createdAt', header: 'Fecha', size: 160, cell: ({ row }) => format(new Date(row.getValue("createdAt")), "dd MMM yy, hh:mm a", { locale: es }), sortingFn: 'datetime' },
         
-        // ✨ COLUMNA MODIFICADA
+        // ✨ 2. COLUMNA MODIFICADA CON LÓGICA DE ICONOS
         { 
             id: 'referral', 
-            // El accessor ahora unifica el nombre desde cualquiera de las dos fuentes.
             accessorFn: row => row.referral?.name || row.referralLink?.name || 'Directa',
             header: 'Origen', 
             size: 130, 
             cell: ({ row }) => {
-                // La lógica de renderizado ahora solo se basa en si hay un nombre o no.
-                const referralName = row.original.referral?.name || row.original.referralLink?.name;
+                const sale = row.original;
+                const referralName = sale.referral?.name || sale.referralLink?.name;
+                
+                // Si existe `sale.referral.name`, es un vendedor (ícono User).
+                // Si no, es un link de referido o venta directa (ícono Share2).
+                const Icon = sale.referral?.name ? User : Share2;
+
                 return (
                     <div className="flex items-center gap-2">
-                        <Share2 className={`h-3 w-3 ${referralName ? 'text-blue-500' : 'text-gray-400'}`} />
+                        <Icon className={`h-3 w-3 ${referralName ? 'text-blue-500' : 'text-gray-400'}`} />
                         {referralName 
                             ? <span className="text-xs font-medium">{referralName}</span> 
                             : <span className="text-xs text-muted-foreground italic">Directa</span>
