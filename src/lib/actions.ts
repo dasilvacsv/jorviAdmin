@@ -463,7 +463,7 @@ async function sendTicketsEmailAndWhatsapp(purchaseId: string): Promise<void> {
   await sendEmail({ to: purchase.buyerEmail, subject, body: emailBody });
 
   // 2. Envío del mensaje de WhatsApp con verificación y manejo de errores
-  const whatsappText = `¡Hola, ${purchase.buyerName}! 🎉\n\nTu compra para la rifa *${purchase.raffle.name}* ha sido confirmada.\n\nAquí están tus tickets de la suerte:\n\n*${ticketNumbers}*\n\nPor favor, únete a nuestro WhatsApp para las dinámicas donde puedes ganar con nosotros:\nhttps://chat.whatsapp.com/DJ7cNWxa7VPKcFpoQBdlyz\n\n¡Mucha suerte! Revisa tu email para más detalles. 😉`;
+  const whatsappText = `¡Hola, ${purchase.buyerName}! 🎉\n\nTu compra para la rifa *${purchase.raffle.name}* ha sido confirmada.\n\nAquí están tus tickets de la suerte:\n\n*${ticketNumbers}*\n\nPor favor, únete a nuestro WhatsApp para las dinámicas donde puedes ganar con nosotros:\nhttps://chat.whatsapp.com/DJ7cNWxa7VPKcFpoQBdlyz\n\n. 😉`;
   
   // --- MEJORA CLAVE ---
   // Verificamos si existe el número de teléfono antes de intentar enviar.
