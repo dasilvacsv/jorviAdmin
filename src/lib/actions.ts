@@ -1702,9 +1702,6 @@ export async function getSalesDataForRaffle(raffleId: string): Promise<RaffleSal
     }
 }
 
-// =================================================================
-// ✨ FUNCIÓN MODIFICADA PARA PAGINACIÓN Y ESTADÍSTICAS ✨
-// =================================================================
 export async function getPaginatedSales(
   raffleId: string,
   options: {
@@ -1721,6 +1718,7 @@ export async function getPaginatedSales(
 
     const { pageIndex, pageSize, sorting, globalFilter, columnFilters, dateFilter } = options;
 
+    // --- 1. CONSTRUCCIÓN DE FILTROS ---
     const conditions = [eq(purchases.raffleId, raffleId)];
     if (globalFilter) {
       conditions.push(or(like(purchases.buyerName, `%${globalFilter}%`), like(purchases.buyerEmail, `%${globalFilter}%`)));
@@ -1730,42 +1728,27 @@ export async function getPaginatedSales(
       if (id === 'status' && Array.isArray(value) && value.length > 0) {
         conditions.push(inArray(purchases.status, value as ('pending' | 'confirmed' | 'rejected')[]));
       }
-      // ✨ 2. Lógica de filtro de referidos MODIFICADA
       if (id === 'referral' && Array.isArray(value) && value.length > 0) {
         const hasDirect = value.includes('Directa');
         const referralNames = value.filter(v => v !== 'Directa');
-        const referralConditions = [];
-
-        // Condición para ventas directas
+        const referralConditions: any[] = [];
         if (hasDirect) {
-            referralConditions.push(and(isNull(purchases.referralLinkId), isNull(purchases.referralId)));
+          referralConditions.push(and(isNull(purchases.referralLinkId), isNull(purchases.referralId)));
         }
-
-        // Condiciones para ventas con referido (de cualquiera de las dos tablas)
         if (referralNames.length > 0) {
-            // Subconsulta para IDs de referralLinks
-            const referralLinkIdsQuery = db.select({ id: referralLinks.id }).from(referralLinks).where(inArray(referralLinks.name, referralNames));
-            // Subconsulta para IDs de referrals
-            const referralIdsQuery = db.select({ id: referrals.id }).from(referrals).where(inArray(referrals.name, referralNames));
-            
-            referralConditions.push(
-                or(
-                    inArray(purchases.referralLinkId, referralLinkIdsQuery),
-                    inArray(purchases.referralId, referralIdsQuery)
-                )
-            );
+          const referralLinkIdsQuery = db.select({ id: referralLinks.id }).from(referralLinks).where(inArray(referralLinks.name, referralNames));
+          const referralIdsQuery = db.select({ id: referrals.id }).from(referrals).where(inArray(referrals.name, referralNames));
+          referralConditions.push(or(inArray(purchases.referralLinkId, referralLinkIdsQuery), inArray(purchases.referralId, referralIdsQuery)));
         }
-
         if (referralConditions.length > 0) {
-            conditions.push(or(...referralConditions));
+          conditions.push(or(...referralConditions));
         }
       }
     });
-
     if (dateFilter) {
-        const startOfDay = new Date(`${dateFilter}T00:00:00.000-04:00`); 
-        const endOfDay = new Date(`${dateFilter}T23:59:59.999-04:00`);
-        conditions.push(sql`${purchases.createdAt} >= ${startOfDay} AND ${purchases.createdAt} <= ${endOfDay}`);
+      const startOfDay = new Date(`${dateFilter}T00:00:00.000-04:00`);
+      const endOfDay = new Date(`${dateFilter}T23:59:59.999-04:00`);
+      conditions.push(sql`${purchases.createdAt} >= ${startOfDay} AND ${purchases.createdAt} <= ${endOfDay}`);
     }
 
     const whereClause = and(...conditions);
@@ -1774,6 +1757,7 @@ export async function getPaginatedSales(
       : [desc(purchases.createdAt)];
 
 
+    // --- 2. CONSULTAS PRINCIPALES PARA DATOS Y ESTADÍSTICAS ---
     const [data, statsResult] = await Promise.all([
       db.query.purchases.findMany({
         where: whereClause,
@@ -1783,7 +1767,7 @@ export async function getPaginatedSales(
         with: {
           tickets: { columns: { ticketNumber: true } },
           referralLink: { columns: { name: true } },
-          referral: { columns: { name: true } }, // ✨ 3. AÑADIR esta relación a la consulta
+          referral: { columns: { name: true } },
         },
       }),
       db.select({
@@ -1797,8 +1781,70 @@ export async function getPaginatedSales(
     const totalRowCount = statsResult[0]?.totalSales || 0;
     const pageCount = Math.ceil(totalRowCount / pageSize);
 
+    // --- 3. LÓGICA PARA BUSCAR Y ADJUNTAR REFERENCIAS SIMILARES ---
+
+    if (data.length === 0) {
+        return {
+            rows: [],
+            pageCount,
+            totalRowCount,
+            statistics: {
+                totalSales: totalRowCount,
+                totalRevenue: statsResult[0]?.totalRevenue || 0,
+                totalTicketsSold: statsResult[0]?.totalTicketsSold || 0,
+                pendingRevenue: statsResult[0]?.pendingRevenue || 0,
+            },
+        };
+    }
+
+    const saleIds = data.map(sale => sale.id);
+    const referenceSuffixes = data
+      .map(sale => sale.paymentReference && sale.paymentReference.length >= 4 ? sale.paymentReference.slice(-4) : null)
+      .filter((suffix): suffix is string => suffix !== null);
+
+    let enrichedRows = data.map(d => ({ ...d, similarReferences: [] }));
+
+    if (referenceSuffixes.length > 0) {
+        const uniqueSuffixes = [...new Set(referenceSuffixes)];
+        const likeConditions = uniqueSuffixes.map(suffix => like(purchases.paymentReference, `%${suffix}`));
+
+        const allSimilarPurchases = await db.query.purchases.findMany({
+            where: and(
+                or(...likeConditions),
+                not(inArray(purchases.id, saleIds))
+            ),
+            with: { raffle: { columns: { name: true } } },
+            orderBy: desc(purchases.createdAt),
+            limit: 50
+        });
+
+        const similarReferencesMap = new Map<string, Purchase[]>();
+        for (const similar of allSimilarPurchases) {
+            if (similar.paymentReference) {
+                const suffix = similar.paymentReference.slice(-4);
+                if (!similarReferencesMap.has(suffix)) {
+                    similarReferencesMap.set(suffix, []);
+                }
+                similarReferencesMap.get(suffix)!.push(similar as any);
+            }
+        }
+        
+        enrichedRows = data.map(sale => {
+            let similar: Purchase[] = [];
+            if (sale.paymentReference && sale.paymentReference.length >= 4) {
+                const suffix = sale.paymentReference.slice(-4);
+                similar = similarReferencesMap.get(suffix) || [];
+            }
+            return {
+                ...sale,
+                similarReferences: similar
+            };
+        });
+    }
+
+    // --- 4. DEVOLVER LOS DATOS ENRIQUECIDOS ---
     return {
-      rows: data as unknown as PurchaseWithTicketsAndRaffle[],
+      rows: enrichedRows as unknown as PurchaseWithTicketsAndRaffle[],
       pageCount,
       totalRowCount,
       statistics: {

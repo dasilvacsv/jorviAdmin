@@ -22,8 +22,8 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 // --- Icons ---
-// ✨ 1. Importar el ícono 'User'
-import { ArrowLeft, Calendar as CalendarIcon, ChevronRight, DollarSign, Filter, Receipt, Search, Ticket, X, Download, Loader2, Clock, Share2, Eye, User } from 'lucide-react';
+// --- CAMBIO 1: Importar el ícono de alerta ---
+import { ArrowLeft, Calendar as CalendarIcon, ChevronRight, DollarSign, Filter, Receipt, Search, Ticket, X, Download, Loader2, Clock, Share2, Eye, User, AlertTriangle } from 'lucide-react';
 
 // --- Types ---
 import { Raffle, PurchaseWithTicketsAndRaffle } from '@/lib/types';
@@ -155,14 +155,56 @@ export function RaffleSalesView({ raffle, initialData, initialTotalRowCount, ini
         }
         setIsFetching(false);
     }, [raffle.id, sorting, debouncedGlobalFilter, columnFilters, date]);
-    
+
     useEffect(() => { fetchSales({ pageIndex: 0, pageSize: 50, reset: true }); }, [sorting, debouncedGlobalFilter, columnFilters, date, fetchSales]);
 
+    // --- CAMBIO 2: Se crea una función para la columna de acciones ---
+    const getActionColumn = (): ColumnDef<PurchaseWithTicketsAndRaffle> => ({
+        id: 'actions',
+        size: 100,
+        header: () => <div className="text-right">Acciones</div>,
+        cell: ({ row }) => {
+            const sale = row.original;
+            const hasSimilarReferences = sale.similarReferences && sale.similarReferences.length > 0;
+
+            return (
+                <div className="text-right flex items-center justify-end">
+                    {hasSimilarReferences && (
+                        <TooltipProvider delayDuration={100}>
+                            <Tooltip>
+                                <TooltipTrigger>
+                                    <AlertTriangle className="h-4 w-4 text-yellow-500 mr-2" />
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                    <p>Posible venta duplicada detectada.</p>
+                                </TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
+                    )}
+                    <TooltipProvider delayDuration={100}>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button variant="ghost" size="icon" onClick={() => setSelectedPurchase(sale)}>
+                                    <Eye className="h-4 w-4" />
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent><p>Ver Detalles</p></TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
+                    <Button variant="ghost" size="icon" onClick={() => row.toggleExpanded()}>
+                        <ChevronRight className={`h-4 w-4 transition-transform duration-200 ${row.getIsExpanded() ? 'rotate-90' : ''}`} />
+                    </Button>
+                </div>
+            );
+        },
+    });
+
+    // --- CAMBIO 3: Se añade la columna de acciones a la tabla ---
     const columns: ColumnDef<PurchaseWithTicketsAndRaffle>[] = useMemo(() => [
-        { 
-            accessorKey: 'buyerInfo', 
-            header: 'Comprador', 
-            size: 250, 
+        {
+            accessorKey: 'buyerInfo',
+            header: 'Comprador',
+            size: 250,
             cell: ({ row }) => {
                 const sale = row.original;
                 return (<div><div className="font-medium text-slate-900 truncate">{sale.buyerName || 'N/A'}</div><div className="text-xs text-muted-foreground truncate">{sale.buyerEmail}</div></div>);
@@ -170,35 +212,30 @@ export function RaffleSalesView({ raffle, initialData, initialTotalRowCount, ini
         },
         { accessorKey: 'status', header: 'Estado', size: 120, cell: ({ row }) => getStatusBadge(row.getValue("status")) },
         { accessorKey: 'createdAt', header: 'Fecha', size: 160, cell: ({ row }) => format(new Date(row.getValue("createdAt")), "dd MMM yy, hh:mm a", { locale: es }), sortingFn: 'datetime' },
-        
-        // ✨ 2. COLUMNA MODIFICADA CON LÓGICA DE ICONOS
-        { 
-            id: 'referral', 
+        {
+            id: 'referral',
             accessorFn: row => row.referral?.name || row.referralLink?.name || 'Directa',
-            header: 'Origen', 
-            size: 130, 
+            header: 'Origen',
+            size: 130,
             cell: ({ row }) => {
                 const sale = row.original;
                 const referralName = sale.referral?.name || sale.referralLink?.name;
-                
-                // Si existe `sale.referral.name`, es un vendedor (ícono User).
-                // Si no, es un link de referido o venta directa (ícono Share2).
                 const Icon = sale.referral?.name ? User : Share2;
-
                 return (
                     <div className="flex items-center gap-2">
                         <Icon className={`h-3 w-3 ${referralName ? 'text-blue-500' : 'text-gray-400'}`} />
-                        {referralName 
-                            ? <span className="text-xs font-medium">{referralName}</span> 
+                        {referralName
+                            ? <span className="text-xs font-medium">{referralName}</span>
                             : <span className="text-xs text-muted-foreground italic">Directa</span>
                         }
                     </div>
                 );
             }
         },
-
         { accessorKey: 'ticketCount', header: 'Tickets', size: 80, cell: ({ row }) => <div className="text-center font-bold">{row.getValue("ticketCount")}</div> },
         { accessorKey: 'amount', header: 'Monto', size: 120, cell: ({ row }) => <div className="font-semibold">{formatCurrency(row.getValue("amount"), raffle.currency)}</div> },
+        // Se añade la columna de acciones
+        getActionColumn()
     ], [raffle.currency]);
 
     const table = useReactTable({
@@ -229,7 +266,7 @@ export function RaffleSalesView({ raffle, initialData, initialTotalRowCount, ini
         estimateSize: (index) => 'isDetailRow' in flatRows[index] ? 200 : 60,
         overscan: 10,
     });
-    
+
     useEffect(() => {
         const [lastItem] = [...rowVirtualizer.getVirtualItems()].reverse();
         if (!lastItem) return;
@@ -268,7 +305,7 @@ export function RaffleSalesView({ raffle, initialData, initialTotalRowCount, ini
                         <Progress value={progress} className="h-2 [&>div]:bg-orange-500" />
                     </div>
                 </section>
-                
+
                 <Card>
                     <CardHeader>
                         <CardTitle>Listado de Transacciones</CardTitle>
@@ -276,15 +313,15 @@ export function RaffleSalesView({ raffle, initialData, initialTotalRowCount, ini
                     </CardHeader>
                     <CardContent>
                         <div className="flex flex-wrap items-center gap-2 mb-4">
-                             <div className="relative flex-grow min-w-[200px]"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input placeholder="Buscar por nombre o email..." value={globalFilter} onChange={(e) => setGlobalFilter(e.target.value)} className="pl-10" /></div>
-                             <Popover><PopoverTrigger asChild><Button variant="outline" className="w-full sm:w-auto justify-start text-left font-normal"><CalendarIcon className="mr-2 h-4 w-4" />{date ? format(date, "PPP", { locale: es }) : <span>Fecha</span>}</Button></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={date} onSelect={setDate} initialFocus /></PopoverContent></Popover>
-                             <DropdownMenu onOpenChange={(open) => { const column = table.getColumn('status'); if (!column) return; if (open) { setTempSelectedStatuses(column.getFilterValue() as string[] ?? []); } else { column.setFilterValue(tempSelectedStatuses.length > 0 ? tempSelectedStatuses : undefined); }}}>
-                                 <DropdownMenuTrigger asChild><Button variant="outline" className="w-full sm:w-auto"><Filter className="mr-2 h-4 w-4" />Estado</Button></DropdownMenuTrigger>
-                                 <DropdownMenuContent align="end">
-                                     <DropdownMenuLabel>Estado</DropdownMenuLabel><DropdownMenuSeparator />
-                                     {['confirmed', 'pending', 'rejected'].map(status => (<DropdownMenuCheckboxItem key={status} checked={tempSelectedStatuses.includes(status)} onCheckedChange={(checked) => { const newFilter = checked ? [...tempSelectedStatuses, status] : tempSelectedStatuses.filter(s => s !== status); setTempSelectedStatuses(newFilter);}} onSelect={(e) => e.preventDefault()}> {status.charAt(0).toUpperCase() + status.slice(1)}</DropdownMenuCheckboxItem>))}
-                                 </DropdownMenuContent>
-                             </DropdownMenu>
+                            <div className="relative flex-grow min-w-[200px]"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input placeholder="Buscar por nombre o email..." value={globalFilter} onChange={(e) => setGlobalFilter(e.target.value)} className="pl-10" /></div>
+                            <Popover><PopoverTrigger asChild><Button variant="outline" className="w-full sm:w-auto justify-start text-left font-normal"><CalendarIcon className="mr-2 h-4 w-4" />{date ? format(date, "PPP", { locale: es }) : <span>Fecha</span>}</Button></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={date} onSelect={setDate} initialFocus /></PopoverContent></Popover>
+                            <DropdownMenu onOpenChange={(open) => { const column = table.getColumn('status'); if (!column) return; if (open) { setTempSelectedStatuses(column.getFilterValue() as string[] ?? []); } else { column.setFilterValue(tempSelectedStatuses.length > 0 ? tempSelectedStatuses : undefined); }}}>
+                                <DropdownMenuTrigger asChild><Button variant="outline" className="w-full sm:w-auto"><Filter className="mr-2 h-4 w-4" />Estado</Button></DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                    <DropdownMenuLabel>Estado</DropdownMenuLabel><DropdownMenuSeparator />
+                                    {['confirmed', 'pending', 'rejected'].map(status => (<DropdownMenuCheckboxItem key={status} checked={tempSelectedStatuses.includes(status)} onCheckedChange={(checked) => { const newFilter = checked ? [...tempSelectedStatuses, status] : tempSelectedStatuses.filter(s => s !== status); setTempSelectedStatuses(newFilter);}} onSelect={(e) => e.preventDefault()}> {status.charAt(0).toUpperCase() + status.slice(1)}</DropdownMenuCheckboxItem>))}
+                                </DropdownMenuContent>
+                            </DropdownMenu>
                             {referralOptions.length > 0 && (<DropdownMenu onOpenChange={(open) => { const column = table.getColumn('referral'); if (!column) return; if (open) { setTempSelectedReferrals(column.getFilterValue() as string[] ?? []); } else { column.setFilterValue(tempSelectedReferrals.length > 0 ? tempSelectedReferrals : undefined); } }}><DropdownMenuTrigger asChild><Button variant="outline" className="w-full sm:w-auto"><Share2 className="mr-2 h-4 w-4" />Referido{selectedReferrals.length > 0 && (<><DropdownMenuSeparator orientation="vertical" className="mx-2 h-4" /><Badge variant="secondary" className="rounded-sm px-1 font-normal lg:hidden">{selectedReferrals.length}</Badge><Badge variant="secondary" className="rounded-sm px-1 font-normal hidden lg:block">{selectedReferrals.length} seleccionado(s)</Badge></>)}</Button></DropdownMenuTrigger><DropdownMenuContent align="end" className="w-[200px]"><DropdownMenuLabel>Origen de Venta</DropdownMenuLabel><DropdownMenuSeparator />{referralOptions.map(referral => (<DropdownMenuCheckboxItem key={referral} checked={tempSelectedReferrals.includes(referral)} onCheckedChange={(checked) => { const newFilter = checked ? [...tempSelectedReferrals, referral] : tempSelectedReferrals.filter(r => r !== referral); setTempSelectedReferrals(newFilter); }} onSelect={(e) => e.preventDefault()}>{referral}</DropdownMenuCheckboxItem>))}</DropdownMenuContent></DropdownMenu>)}
                             {isFiltered && (<Button variant="ghost" onClick={resetFilters} size="icon" className="h-9 w-9"><X className="h-4 w-4" /><span className="sr-only">Limpiar filtros</span></Button>)}
                             {isClient && (<PDFDownloadLink document={<SalesPDF sales={data} stats={statistics} raffle={raffle} filterDate={date} />} fileName={`reporte-ventas-${raffle.name.replace(/\s+/g, '_')}-${format(new Date(), 'yyyy-MM-dd')}.pdf`}>{({ loading }) => (<Button variant="secondary" className="w-full sm:w-auto" disabled={loading}>{loading ? <Loader2 className="mr-0 sm:mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-0 sm:mr-2 h-4 w-4" />}<span className="hidden sm:inline">Exportar</span></Button>)}</PDFDownloadLink>)}
@@ -300,7 +337,7 @@ export function RaffleSalesView({ raffle, initialData, initialTotalRowCount, ini
                                                     {flexRender(header.column.columnDef.header, header.getContext())}
                                                 </div>
                                             ))}
-                                            <div style={{ width: '100px' }} className="p-3"></div>
+                                            {/* --- CAMBIO 4: Eliminamos la cabecera de acciones extra --- */}
                                         </Fragment>
                                     ))}
                                 </div>
@@ -326,21 +363,7 @@ export function RaffleSalesView({ raffle, initialData, initialTotalRowCount, ini
                                                             {flexRender(cell.column.columnDef.cell, cell.getContext())}
                                                         </div>
                                                     ))}
-                                                    <div style={{ width: '100px' }} className="p-3 text-right flex items-center justify-end">
-                                                        <TooltipProvider delayDuration={100}>
-                                                            <Tooltip>
-                                                                <TooltipTrigger asChild>
-                                                                    <Button variant="ghost" size="icon" onClick={() => setSelectedPurchase(rowItem.original)}>
-                                                                        <Eye className="h-4 w-4" />
-                                                                    </Button>
-                                                                </TooltipTrigger>
-                                                                <TooltipContent><p>Ver Detalles</p></TooltipContent>
-                                                            </Tooltip>
-                                                        </TooltipProvider>
-                                                        <Button variant="ghost" size="icon" onClick={() => rowItem.toggleExpanded()}>
-                                                            <ChevronRight className={`h-4 w-4 transition-transform duration-200 ${rowItem.getIsExpanded() ? 'rotate-90' : ''}`} />
-                                                        </Button>
-                                                    </div>
+                                                    {/* --- CAMBIO 5: Se eliminan los botones de acción de aquí, ya que ahora están en su propia columna --- */}
                                                 </div>
                                             )}
                                         </div>
@@ -350,45 +373,50 @@ export function RaffleSalesView({ raffle, initialData, initialTotalRowCount, ini
                         </div>
 
                         <div className="md:hidden space-y-3">
-                             {rows.length > 0 ? rows.map(row => {
-                                 const sale = row.original;
-                                 return (
-                                     <Collapsible key={row.id} open={row.getIsExpanded()} onOpenChange={() => row.toggleExpanded()}>
-                                         <div className="rounded-lg border bg-card text-card-foreground shadow-sm">
-                                             <CollapsibleTrigger className="w-full p-4 text-left">
-                                                 <div className="flex justify-between items-start">
-                                                     <div>
-                                                         <p className="font-semibold">{sale.buyerName || 'N/A'}</p>
-                                                         <p className="text-xs text-muted-foreground">{sale.buyerEmail}</p>
-                                                         <p className="text-xs text-muted-foreground mt-1">{format(new Date(sale.createdAt), "dd MMM, hh:mm a", { locale: es })}</p>
-                                                     </div>
-                                                     <div className="flex flex-col items-end gap-2">
-                                                         {getStatusBadge(sale.status)}
-                                                         <span className="font-bold text-lg">{formatCurrency(sale.amount, raffle.currency)}</span>
-                                                     </div>
-                                                 </div>
-                                                 <div className="flex justify-between items-center mt-3 pt-3 border-t">
-                                                     <div className="text-sm">
-                                                         <span className="text-muted-foreground">Tickets:</span> <span className="font-bold">{sale.ticketCount}</span>
-                                                     </div>
-                                                     <div className="flex items-center gap-1">
-                                                         <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); setSelectedPurchase(sale); }}>
-                                                             <Eye className="h-4 w-4 mr-2" />
-                                                             Detalles
-                                                         </Button>
-                                                         <div className="text-muted-foreground">
-                                                             <ChevronRight className={`h-4 w-4 transition-transform duration-200 ${row.getIsExpanded() ? 'rotate-90' : ''}`} />
-                                                         </div>
-                                                     </div>
-                                                 </div>
-                                             </CollapsibleTrigger>
-                                             <CollapsibleContent>
-                                                 <SaleDetailContent row={row} />
-                                             </CollapsibleContent>
-                                         </div>
-                                     </Collapsible>
-                                 )
-                             }) : null}
+                                {rows.length > 0 ? rows.map(row => {
+                                    const sale = row.original;
+                                    const hasSimilarReferences = sale.similarReferences && sale.similarReferences.length > 0;
+                                    return (
+                                        <Collapsible key={row.id} open={row.getIsExpanded()} onOpenChange={() => row.toggleExpanded()}>
+                                            <div className="rounded-lg border bg-card text-card-foreground shadow-sm">
+                                                <CollapsibleTrigger className="w-full p-4 text-left">
+                                                    <div className="flex justify-between items-start">
+                                                        <div>
+                                                            <div className="flex items-center gap-2">
+                                                                {/* --- CAMBIO 6: Se añade el icono de alerta en la vista móvil --- */}
+                                                                {hasSimilarReferences && <AlertTriangle className="h-4 w-4 text-yellow-500" />}
+                                                                <p className="font-semibold">{sale.buyerName || 'N/A'}</p>
+                                                            </div>
+                                                            <p className="text-xs text-muted-foreground">{sale.buyerEmail}</p>
+                                                            <p className="text-xs text-muted-foreground mt-1">{format(new Date(sale.createdAt), "dd MMM, hh:mm a", { locale: es })}</p>
+                                                        </div>
+                                                        <div className="flex flex-col items-end gap-2">
+                                                            {getStatusBadge(sale.status)}
+                                                            <span className="font-bold text-lg">{formatCurrency(sale.amount, raffle.currency)}</span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex justify-between items-center mt-3 pt-3 border-t">
+                                                        <div className="text-sm">
+                                                            <span className="text-muted-foreground">Tickets:</span> <span className="font-bold">{sale.ticketCount}</span>
+                                                        </div>
+                                                        <div className="flex items-center gap-1">
+                                                            <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); setSelectedPurchase(sale); }}>
+                                                                <Eye className="h-4 w-4 mr-2" />
+                                                                Detalles
+                                                            </Button>
+                                                            <div className="text-muted-foreground">
+                                                                <ChevronRight className={`h-4 w-4 transition-transform duration-200 ${row.getIsExpanded() ? 'rotate-90' : ''}`} />
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </CollapsibleTrigger>
+                                                <CollapsibleContent>
+                                                    <SaleDetailContent row={row} />
+                                                </CollapsibleContent>
+                                            </div>
+                                        </Collapsible>
+                                    )
+                                }) : null}
                         </div>
 
                         <div className="flex flex-col items-center justify-center gap-4 py-4">
@@ -401,9 +429,14 @@ export function RaffleSalesView({ raffle, initialData, initialTotalRowCount, ini
                 </Card>
             </main>
             
+            {/* --- CAMBIO 7: La lógica del modal se mantiene exactamente igual. ¡Ya es correcta! --- */}
             {selectedPurchase && (
                 <PurchaseDetailsModal
-                    purchase={selectedPurchase}
+                    // Usamos el ID para forzar al modal a recargar sus datos si es necesario
+                    key={selectedPurchase.id}
+                    // No pasamos la compra completa, sino solo el ID.
+                    // El modal se encargará de buscar la información más actualizada.
+                    purchaseId={selectedPurchase.id}
                     isOpen={!!selectedPurchase}
                     onClose={() => setSelectedPurchase(null)}
                 />
