@@ -432,11 +432,16 @@ export function RaffleSalesView({ raffle, initialData, initialTotalRowCount, ini
             {/* --- CAMBIO 7: La lógica del modal se mantiene exactamente igual. ¡Ya es correcta! --- */}
             {selectedPurchase && (
                 <PurchaseDetailsModal
-                    // Usamos el ID para forzar al modal a recargar sus datos si es necesario
-                    key={selectedPurchase.id}
-                    // No pasamos la compra completa, sino solo el ID.
-                    // El modal se encargará de buscar la información más actualizada.
-                    purchaseId={selectedPurchase.id}
+                    // Volvemos a pasar el objeto de la compra completo.
+                    // Esto es más rápido porque ya tenemos toda la información.
+                    purchase={selectedPurchase as any}
+                    
+                    // Ya que `purchase` lo tiene todo, ya no necesitamos pasar el ID por separado.
+                    // purchaseId={selectedPurchase.id} (ELIMINAR ESTA LÍNEA)
+
+                    // Pasamos las referencias similares que ya vienen en el objeto
+                    similarReferences={selectedPurchase.similarReferences || []}
+                    
                     isOpen={!!selectedPurchase}
                     onClose={() => setSelectedPurchase(null)}
                 />
