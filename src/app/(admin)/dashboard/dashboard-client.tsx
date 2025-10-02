@@ -137,22 +137,29 @@ export function DashboardClient({ stats, revenueUsd, revenueVes, pendingPurchase
                         <CardContent>
                             <div className="overflow-x-auto">
                                 <Table>
-                                    {/* CAMBIO: Se eliminó la última cabecera vacía */}
                                     <TableHeader><TableRow><TableHead>Comprador</TableHead><TableHead className="hidden sm:table-cell">Rifa</TableHead><TableHead className="text-right">Monto</TableHead><TableHead className="text-right">Acción</TableHead></TableRow></TableHeader>
                                     <TableBody>
                                         {pendingPurchasesList?.length > 0 ? (pendingPurchasesList.map((purchase) => (
-                                            // CAMBIO: Se eliminó el componente Collapsible y Fragment. Ahora es solo una TableRow.
+                                            // --- CÓDIGO CORREGIDO ---
                                             <TableRow key={purchase.id}>
-                                                <TableCell><div className="font-medium">{purchase.buyerName}</div><div className="text-xs text-muted-foreground hidden md:block">{purchase.buyerEmail}</div></TableCell>
-                                                <TableCell className="hidden sm:table-cell">{purchase.raffle.name}</TableCell>
-                                                <TableCell className="text-right font-semibold">{purchase.raffle.currency === 'VES' ? 'Bs.' : '$'}{parseFloat(purchase.amount).toFixed(2)}</TableCell>
-                                                <TableCell className="text-right"><PurchaseDetailsModal purchase={purchase} raffleCurrency={purchase.raffle.currency} /></TableCell>
-                                                {/* CAMBIO: Se eliminó la celda (TableCell) que contenía el botón del desplegable. */}
+                                                <TableCell>
+                                                    <div className="font-medium">{purchase.buyerName}</div>
+                                                    <div className="text-xs text-muted-foreground hidden md:block">{purchase.buyerEmail}</div>
+                                                </TableCell>
+                                                <TableCell className="hidden sm:table-cell">
+                                                    {purchase.raffle?.name ?? <span className="text-muted-foreground italic">Rifa eliminada</span>}
+                                                </TableCell>
+                                                <TableCell className="text-right font-semibold">
+                                                    {purchase.raffle?.currency === 'VES' ? 'Bs.' : '$'}{parseFloat(purchase.amount).toFixed(2)}
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    <PurchaseDetailsModal purchase={purchase} raffleCurrency={purchase.raffle?.currency} />
+                                                </TableCell>
                                             </TableRow>
+                                            // --- FIN DEL CÓDIGO CORREGIDO ---
                                         )))
-                                            // CAMBIO: Se ajustó el colSpan de 5 a 4.
-                                            : (<TableRow><TableCell colSpan={4} className="h-24 text-center">¡Todo al día! No hay compras pendientes.</TableCell></TableRow>
-                                            )}
+                                        : (<TableRow><TableCell colSpan={4} className="h-24 text-center">¡Todo al día! No hay compras pendientes.</TableCell></TableRow>
+                                        )}
                                     </TableBody>
                                 </Table>
                             </div>

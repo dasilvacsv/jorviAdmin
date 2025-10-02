@@ -32,7 +32,16 @@ const formatPhoneNumber = (phone: string): string => {
     return `519${cleanPhone.substring(2)}`;
   }
 
-  // 4. Para cualquier otro caso (números de otros países o números peruanos ya correctos),
+  // --- INICIO DE LA MODIFICACIÓN ---
+  // 4. Lógica para corregir números de Venezuela con doble código (58).
+  if (cleanPhone.startsWith('5858')) {
+    // Si el número empieza con '5858', elimina el primer '58'.
+    // Ejemplo: '58584141234567' se convierte en '584141234567'.
+    return cleanPhone.substring(2);
+  }
+  // --- FIN DE LA MODIFICACIÓN ---
+
+  // 5. Para cualquier otro caso (números de otros países o números ya correctos),
   //    devuelve el número limpio sin modificaciones.
   return cleanPhone;
 };
@@ -66,13 +75,10 @@ export async function sendWhatsappMessage(
         'apikey': API_KEY,
         'Content-Type': 'application/json',
       },
-      // --- INICIO DE LA CORRECCIÓN ---
-      // El cuerpo (body) ahora es más simple, con "text" en el nivel principal.
       body: JSON.stringify({
         number: validated.phoneNumber,
         text: validated.text,
       }),
-      // --- FIN DE LA CORRECCIÓN ---
     })
 
     if (!response.ok) {
@@ -109,7 +115,6 @@ export async function sendWhatsappMessageWithQR(
     
     const base64Image = image.replace(/^data:image\/(png|jpeg|jpg);base64,/, '');
     
-    // --- Usando los nombres de tu .env ---
     const API_BASE_URL = process.env.EVOLUTION_API_URL
     const API_KEY = process.env.EVOLUTION_API_KEY
     const INSTANCE_NAME = process.env.EVOLUTION_INSTANCE
@@ -168,7 +173,6 @@ export async function sendWhatsappMessageWithPDF(
     const formattedPhone = formatPhoneNumber(phoneNumber);
     const base64Data = pdfBase64.replace(/^data:application\/pdf;base64,/, '');
     
-    // --- Usando los nombres de tu .env ---
     const API_BASE_URL = process.env.EVOLUTION_API_URL
     const API_KEY = process.env.EVOLUTION_API_KEY
     const INSTANCE_NAME = process.env.EVOLUTION_INSTANCE
