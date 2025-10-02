@@ -19,7 +19,7 @@ import {
   referrals,
 } from "./db/schema";
 import { revalidatePath } from "next/cache";
-import { eq, desc, inArray, and, lt, sql, like, ne, asc, or, isNull, isNotNull } from "drizzle-orm";
+import { eq, desc, inArray, and, lt, sql, like, ne, asc, or, isNull, isNotNull, not } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { uploadToS3, deleteFromS3 } from "./s3";
 import crypto from "crypto";
@@ -1702,6 +1702,12 @@ export async function getSalesDataForRaffle(raffleId: string): Promise<RaffleSal
     }
 }
 
+// =================================================================
+// ✨ FUNCIÓN MODIFICADA PARA PAGINACIÓN Y ESTADÍSTICAS ✨
+// =================================================================
+// =================================================================
+// ✨ FUNCIÓN MODIFICADA PARA PAGINACIÓN, ESTADÍSTICAS Y DUPLICADOS ✨
+// =================================================================
 export async function getPaginatedSales(
   raffleId: string,
   options: {
