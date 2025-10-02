@@ -22,11 +22,11 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 // --- Icons ---
-// --- CAMBIO 1: Importar el ícono de alerta ---
+// --- CAMBIO 1: Asegurarse de que AlertTriangle está importado ---
 import { ArrowLeft, Calendar as CalendarIcon, ChevronRight, DollarSign, Filter, Receipt, Search, Ticket, X, Download, Loader2, Clock, Share2, Eye, User, AlertTriangle } from 'lucide-react';
 
 // --- Types ---
-import { Raffle, PurchaseWithTicketsAndRaffle } from '@/lib/types';
+import { Raffle, PurchaseWithTicketsAndRaffle } from '@/lib/types'; // Asumo que este tipo ahora incluye `similarReferences`
 import { ColumnDef, flexRender, getCoreRowModel, useReactTable, SortingState, ColumnFiltersState, Row, ExpandedState } from "@tanstack/react-table";
 import { getPaginatedSales } from '@/lib/actions';
 import { PurchaseDetailsModal } from '../purchase-details-modal';
@@ -158,17 +158,19 @@ export function RaffleSalesView({ raffle, initialData, initialTotalRowCount, ini
 
     useEffect(() => { fetchSales({ pageIndex: 0, pageSize: 50, reset: true }); }, [sorting, debouncedGlobalFilter, columnFilters, date, fetchSales]);
 
-    // --- CAMBIO 2: Se crea una función para la columna de acciones ---
+    // --- CAMBIO 2: Se crea una función para la columna de acciones que incluye el indicador de duplicados ---
     const getActionColumn = (): ColumnDef<PurchaseWithTicketsAndRaffle> => ({
         id: 'actions',
         size: 100,
         header: () => <div className="text-right">Acciones</div>,
         cell: ({ row }) => {
             const sale = row.original;
+            // Verifica si existen referencias similares para esta venta
             const hasSimilarReferences = sale.similarReferences && sale.similarReferences.length > 0;
 
             return (
                 <div className="text-right flex items-center justify-end">
+                    {/* Renderiza el ícono de alerta si se encuentran duplicados */}
                     {hasSimilarReferences && (
                         <TooltipProvider delayDuration={100}>
                             <Tooltip>
@@ -337,7 +339,6 @@ export function RaffleSalesView({ raffle, initialData, initialTotalRowCount, ini
                                                     {flexRender(header.column.columnDef.header, header.getContext())}
                                                 </div>
                                             ))}
-                                            {/* --- CAMBIO 4: Eliminamos la cabecera de acciones extra --- */}
                                         </Fragment>
                                     ))}
                                 </div>
@@ -363,7 +364,6 @@ export function RaffleSalesView({ raffle, initialData, initialTotalRowCount, ini
                                                             {flexRender(cell.column.columnDef.cell, cell.getContext())}
                                                         </div>
                                                     ))}
-                                                    {/* --- CAMBIO 5: Se eliminan los botones de acción de aquí, ya que ahora están en su propia columna --- */}
                                                 </div>
                                             )}
                                         </div>
@@ -375,6 +375,7 @@ export function RaffleSalesView({ raffle, initialData, initialTotalRowCount, ini
                         <div className="md:hidden space-y-3">
                                 {rows.length > 0 ? rows.map(row => {
                                     const sale = row.original;
+                                    // --- CAMBIO 4: Se añade la misma lógica para la vista móvil ---
                                     const hasSimilarReferences = sale.similarReferences && sale.similarReferences.length > 0;
                                     return (
                                         <Collapsible key={row.id} open={row.getIsExpanded()} onOpenChange={() => row.toggleExpanded()}>
@@ -383,7 +384,7 @@ export function RaffleSalesView({ raffle, initialData, initialTotalRowCount, ini
                                                     <div className="flex justify-between items-start">
                                                         <div>
                                                             <div className="flex items-center gap-2">
-                                                                {/* --- CAMBIO 6: Se añade el icono de alerta en la vista móvil --- */}
+                                                                {/* --- CAMBIO 5: Se añade el icono de alerta en la vista móvil --- */}
                                                                 {hasSimilarReferences && <AlertTriangle className="h-4 w-4 text-yellow-500" />}
                                                                 <p className="font-semibold">{sale.buyerName || 'N/A'}</p>
                                                             </div>
@@ -429,19 +430,12 @@ export function RaffleSalesView({ raffle, initialData, initialTotalRowCount, ini
                 </Card>
             </main>
             
-            {/* --- CAMBIO 7: La lógica del modal se mantiene exactamente igual. ¡Ya es correcta! --- */}
+            {/* --- CAMBIO 6: Se pasa la propiedad `similarReferences` al modal --- */}
             {selectedPurchase && (
                 <PurchaseDetailsModal
-                    // Volvemos a pasar el objeto de la compra completo.
-                    // Esto es más rápido porque ya tenemos toda la información.
                     purchase={selectedPurchase as any}
-                    
-                    // Ya que `purchase` lo tiene todo, ya no necesitamos pasar el ID por separado.
-                    // purchaseId={selectedPurchase.id} (ELIMINAR ESTA LÍNEA)
-
-                    // Pasamos las referencias similares que ya vienen en el objeto
+                    // Pasa el array de referencias similares o un array vacío si no existe
                     similarReferences={selectedPurchase.similarReferences || []}
-                    
                     isOpen={!!selectedPurchase}
                     onClose={() => setSelectedPurchase(null)}
                 />

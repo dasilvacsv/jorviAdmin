@@ -1702,12 +1702,6 @@ export async function getSalesDataForRaffle(raffleId: string): Promise<RaffleSal
     }
 }
 
-// =================================================================
-// ✨ FUNCIÓN MODIFICADA PARA PAGINACIÓN Y ESTADÍSTICAS ✨
-// =================================================================
-// =================================================================
-// ✨ FUNCIÓN MODIFICADA PARA PAGINACIÓN, ESTADÍSTICAS Y DUPLICADOS ✨
-// =================================================================
 export async function getPaginatedSales(
   raffleId: string,
   options: {
@@ -1716,11 +1710,11 @@ export async function getPaginatedSales(
     sorting: SortingState;
     globalFilter: string;
     columnFilters: { id: string; value: unknown }[];
-    dateFilter?: string; // Fecha en formato 'yyyy-MM-dd'
+    dateFilter?: string;
   }
 ) {
   try {
-    await requireAdmin(); // Asegura permisos
+    await requireAdmin();
 
     const { pageIndex, pageSize, sorting, globalFilter, columnFilters, dateFilter } = options;
 
@@ -1786,67 +1780,58 @@ export async function getPaginatedSales(
 
     const totalRowCount = statsResult[0]?.totalSales || 0;
     const pageCount = Math.ceil(totalRowCount / pageSize);
-
-    // --- 3. LÓGICA PARA BUSCAR Y ADJUNTAR REFERENCIAS SIMILARES ---
-
+    
+    // --- 3. LÓGICA PARA BUSCAR Y ADJUNTAR DUPLICADOS ---
     if (data.length === 0) {
-        return {
-            rows: [],
-            pageCount,
-            totalRowCount,
-            statistics: {
-                totalSales: totalRowCount,
-                totalRevenue: statsResult[0]?.totalRevenue || 0,
-                totalTicketsSold: statsResult[0]?.totalTicketsSold || 0,
-                pendingRevenue: statsResult[0]?.pendingRevenue || 0,
-            },
-        };
+      return {
+        rows: [],
+        pageCount,
+        totalRowCount,
+        statistics: {
+          totalSales: totalRowCount,
+          totalRevenue: statsResult[0]?.totalRevenue || 0,
+          totalTicketsSold: statsResult[0]?.totalTicketsSold || 0,
+          pendingRevenue: statsResult[0]?.pendingRevenue || 0,
+        },
+      };
     }
 
     const saleIds = data.map(sale => sale.id);
-    const referenceSuffixes = data
-      .map(sale => sale.paymentReference && sale.paymentReference.length >= 4 ? sale.paymentReference.slice(-4) : null)
-      .filter((suffix): suffix is string => suffix !== null);
+    const paymentReferences = data
+      .map(sale => sale.paymentReference)
+      .filter((ref): ref is string => ref !== null && ref !== undefined && ref !== '');
 
-    let enrichedRows = data.map(d => ({ ...d, similarReferences: [] }));
+    let allSimilarPurchases: Purchase[] = [];
 
-    if (referenceSuffixes.length > 0) {
-        const uniqueSuffixes = [...new Set(referenceSuffixes)];
-        const likeConditions = uniqueSuffixes.map(suffix => like(purchases.paymentReference, `%${suffix}`));
+    if (paymentReferences.length > 0) {
+      const likeConditions = paymentReferences.map(ref => {
+        const fullMatch = eq(purchases.paymentReference, ref);
+        return ref.length >= 4 ? or(fullMatch, like(purchases.paymentReference, `%${ref.slice(-4)}`)) : fullMatch;
+      });
 
-        const allSimilarPurchases = await db.query.purchases.findMany({
-            where: and(
-                or(...likeConditions),
-                not(inArray(purchases.id, saleIds))
-            ),
-            with: { raffle: { columns: { name: true } } },
-            orderBy: desc(purchases.createdAt),
-            limit: 50
-        });
-
-        const similarReferencesMap = new Map<string, Purchase[]>();
-        for (const similar of allSimilarPurchases) {
-            if (similar.paymentReference) {
-                const suffix = similar.paymentReference.slice(-4);
-                if (!similarReferencesMap.has(suffix)) {
-                    similarReferencesMap.set(suffix, []);
-                }
-                similarReferencesMap.get(suffix)!.push(similar as any);
-            }
-        }
-        
-        enrichedRows = data.map(sale => {
-            let similar: Purchase[] = [];
-            if (sale.paymentReference && sale.paymentReference.length >= 4) {
-                const suffix = sale.paymentReference.slice(-4);
-                similar = similarReferencesMap.get(suffix) || [];
-            }
-            return {
-                ...sale,
-                similarReferences: similar
-            };
-        });
+      const similarResults = await db.select()
+        .from(purchases)
+        .where(and(
+          or(...likeConditions),
+          not(inArray(purchases.id, saleIds))
+        ))
+        .orderBy(desc(purchases.createdAt))
+        .limit(50);
+      
+      allSimilarPurchases = similarResults as Purchase[];
     }
+
+    const enrichedRows = data.map(sale => {
+      const exactDuplicate = allSimilarPurchases.find(p => p.paymentReference && sale.paymentReference && p.paymentReference === sale.paymentReference);
+      const similarReferences = allSimilarPurchases.filter(p => p.paymentReference && sale.paymentReference && p.paymentReference.length >= 4 && p.paymentReference.slice(-4) === sale.paymentReference.slice(-4));
+      
+      const combinedSimilar = [...new Map([...(exactDuplicate ? [exactDuplicate] : []), ...similarReferences].map(item => [item.id, item])).values()];
+
+      return {
+        ...sale,
+        similarReferences: combinedSimilar,
+      };
+    });
 
     // --- 4. DEVOLVER LOS DATOS ENRIQUECIDOS ---
     return {
@@ -1872,7 +1857,6 @@ export async function getPaginatedSales(
     };
   }
 }
-
 
 // ✨ ==========================================================
 // ✨ FUNCIÓN MODIFICADA PARA OBTENER OPCIONES DE FILTRO DE REFERIDOS

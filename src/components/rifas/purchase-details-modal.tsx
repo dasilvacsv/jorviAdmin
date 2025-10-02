@@ -46,7 +46,7 @@ import { Badge } from "@/components/ui/badge";
 import { useFormStatus, useFormState } from "react-dom";
 import { useToast } from "@/hooks/use-toast";
 import { updatePurchaseStatusAction, updatePurchaseInfoAction, getSaleDetails } from "@/lib/actions";
-
+import { type Purchase } from "@/lib/types";
 // Icons
 import {
     Check, X, Eye, Receipt, User, Mail, Phone, Ticket, DollarSign,
@@ -56,34 +56,13 @@ import {
 import Image from "next/image";
 
 
-// --- TIPOS ACTUALIZADOS ---
-export interface Purchase {
-    id: string;
-    buyerName: string | null;
-    buyerEmail: string;
-    buyerPhone: string | null;
-    ticketCount: number;
-    amount: string;
-    paymentMethod: string | null;
-    paymentReference: string | null;
-    paymentScreenshotUrl: string | null;
-    status: string;
-    createdAt: string; // <-- Añadido para mostrar fecha en duplicados
-    raffle?: {
-        name?: string; // <-- Añadido para mostrar nombre de rifa en duplicados
-        currency: 'USD' | 'VES';
-    };
-}
-
 interface PurchaseDetailsModalProps {
-    purchase?: Purchase;
+    purchase?: Purchase; // Ahora usará el tipo importado
     purchaseId?: string;
     isOpen?: boolean;
     onClose?: () => void;
     raffleCurrency?: 'USD' | 'VES';
-    // Las props isDuplicate y duplicateSaleId ya no son necesarias,
-    // la lógica se basa en la lista similarReferences
-    similarReferences?: Purchase[];
+    similarReferences?: Purchase[]; // Ahora también usará el tipo importado
 }
 
 // --- COMPONENTES AUXILIARES ---
