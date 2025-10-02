@@ -189,36 +189,43 @@ export function PurchaseDetailsModal({
 
     useEffect(() => {
     const loadPurchaseData = async () => {
-      if (purchaseId && (!initialPurchase || !open)) {
-        setLoading(true);
-        try {
-          const result = await getSaleDetails(purchaseId);
-          if (result) {
-            setPurchaseData(result.purchase as Purchase);
-            setRaffleCurrency(result.purchase.raffle.currency);
-            setSimilarReferences(result.similarReferences as Purchase[]);
-          } else {
-            toast({ title: "Error", description: "No se pudo cargar la información de la compra.", variant: "destructive" });
-          }
-        } catch (error) {
-          console.error("Error loading purchase:", error);
-          toast({ title: "Error", description: "Ocurrió un error al cargar los datos.", variant: "destructive" });
-        } finally {
-          setLoading(false);
+        // Esta función es para cuando el modal necesita buscar los datos por sí mismo
+        if (purchaseId) {
+            setLoading(true);
+            try {
+                const result = await getSaleDetails(purchaseId);
+                if (result) {
+                    setPurchaseData(result.purchase as Purchase);
+                    setRaffleCurrency(result.purchase.raffle.currency);
+                    setSimilarReferences(result.similarReferences as Purchase[]);
+                } else {
+                    toast({ title: "Error", description: "No se pudo cargar la información de la compra.", variant: "destructive" });
+                }
+            } catch (error) {
+                console.error("Error loading purchase:", error);
+                toast({ title: "Error", description: "Ocurrió un error al cargar los datos.", variant: "destructive" });
+            } finally {
+                setLoading(false);
+            }
         }
-      } else if (initialPurchase) {
-        setPurchaseData(initialPurchase);
-        setSimilarReferences(initialSimilarReferences); // Esta línea depende de initialSimilarReferences
-        if(initialPurchase.raffle?.currency) {
-          setRaffleCurrency(initialPurchase.raffle.currency);
-        }
-      }
     };
 
+    // Solo ejecutamos la lógica cuando el modal se abre (open es true)
     if (open) {
-      loadPurchaseData();
+        if (initialPurchase) {
+            // Si ya tenemos los datos (desde el dashboard), simplemente los establecemos en el estado.
+            setPurchaseData(initialPurchase);
+            setSimilarReferences(initialSimilarReferences);
+            if(initialPurchase.raffle?.currency) {
+                setRaffleCurrency(initialPurchase.raffle.currency);
+            }
+        } else if (purchaseId) {
+            // Si no tenemos los datos pero sí un ID, los buscamos.
+            loadPurchaseData();
+        }
     }
-  }, [open, purchaseId, initialPurchase, initialSimilarReferences, toast]);
+// eslint-disable-next-line react-hooks/exhaustive-deps
+}, [open]); // <-- ¡CAMBIO CLAVE! El efecto solo depende de 'open'.
 
     useEffect(() => {
         if (state.message) {
