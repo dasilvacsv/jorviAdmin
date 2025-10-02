@@ -188,37 +188,37 @@ export function PurchaseDetailsModal({
     }, [controlledOpen]);
 
     useEffect(() => {
-        const loadPurchaseData = async () => {
-            if (purchaseId && (!initialPurchase || !open)) {
-                setLoading(true);
-                try {
-                    const result = await getSaleDetails(purchaseId);
-                    if (result) {
-                        setPurchaseData(result.purchase as Purchase);
-                        setRaffleCurrency(result.purchase.raffle.currency);
-                        setSimilarReferences(result.similarReferences as Purchase[]);
-                    } else {
-                        toast({ title: "Error", description: "No se pudo cargar la información de la compra.", variant: "destructive" });
-                    }
-                } catch (error) {
-                    console.error("Error loading purchase:", error);
-                    toast({ title: "Error", description: "Ocurrió un error al cargar los datos.", variant: "destructive" });
-                } finally {
-                    setLoading(false);
-                }
-            } else if (initialPurchase) {
-                setPurchaseData(initialPurchase);
-                setSimilarReferences(initialSimilarReferences);
-                if(initialPurchase.raffle?.currency) {
-                    setRaffleCurrency(initialPurchase.raffle.currency);
-                }
-            }
-        };
-
-        if (open) {
-            loadPurchaseData();
+    const loadPurchaseData = async () => {
+      if (purchaseId && (!initialPurchase || !open)) {
+        setLoading(true);
+        try {
+          const result = await getSaleDetails(purchaseId);
+          if (result) {
+            setPurchaseData(result.purchase as Purchase);
+            setRaffleCurrency(result.purchase.raffle.currency);
+            setSimilarReferences(result.similarReferences as Purchase[]);
+          } else {
+            toast({ title: "Error", description: "No se pudo cargar la información de la compra.", variant: "destructive" });
+          }
+        } catch (error) {
+          console.error("Error loading purchase:", error);
+          toast({ title: "Error", description: "Ocurrió un error al cargar los datos.", variant: "destructive" });
+        } finally {
+          setLoading(false);
         }
-    }, [open, purchaseId, initialPurchase, toast]);
+      } else if (initialPurchase) {
+        setPurchaseData(initialPurchase);
+        setSimilarReferences(initialSimilarReferences); // Esta línea depende de initialSimilarReferences
+        if(initialPurchase.raffle?.currency) {
+          setRaffleCurrency(initialPurchase.raffle.currency);
+        }
+      }
+    };
+
+    if (open) {
+      loadPurchaseData();
+    }
+  }, [open, purchaseId, initialPurchase, initialSimilarReferences, toast]);
 
     useEffect(() => {
         if (state.message) {

@@ -1718,7 +1718,7 @@ export async function getPaginatedSales(
 
     const { pageIndex, pageSize, sorting, globalFilter, columnFilters, dateFilter } = options;
 
-    // --- 1. CONSTRUCCIÓN DE FILTROS ---
+    // --- 1. CONSTRUCCIÓN DE FILTROS (Sin cambios aquí) ---
     const conditions = [eq(purchases.raffleId, raffleId)];
     if (globalFilter) {
       conditions.push(or(like(purchases.buyerName, `%${globalFilter}%`), like(purchases.buyerEmail, `%${globalFilter}%`)));
@@ -1757,7 +1757,7 @@ export async function getPaginatedSales(
       : [desc(purchases.createdAt)];
 
 
-    // --- 2. CONSULTAS PRINCIPALES PARA DATOS Y ESTADÍSTICAS ---
+    // --- 2. CONSULTAS PRINCIPALES PARA DATOS Y ESTADÍSTICAS (Sin cambios aquí) ---
     const [data, statsResult] = await Promise.all([
       db.query.purchases.findMany({
         where: whereClause,
@@ -1781,12 +1781,11 @@ export async function getPaginatedSales(
     const totalRowCount = statsResult[0]?.totalSales || 0;
     const pageCount = Math.ceil(totalRowCount / pageSize);
     
-    // --- 3. LÓGICA PARA BUSCAR Y ADJUNTAR DUPLICADOS ---
+    // --- 3. LÓGICA CORREGIDA PARA BUSCAR Y ADJUNTAR DUPLICADOS ---
+    // Si no hay resultados, devolvemos temprano.
     if (data.length === 0) {
       return {
-        rows: [],
-        pageCount,
-        totalRowCount,
+        rows: [], pageCount, totalRowCount,
         statistics: {
           totalSales: totalRowCount,
           totalRevenue: statsResult[0]?.totalRevenue || 0,
@@ -1796,42 +1795,36 @@ export async function getPaginatedSales(
       };
     }
 
-    const saleIds = data.map(sale => sale.id);
-    const paymentReferences = data
-      .map(sale => sale.paymentReference)
-      .filter((ref): ref is string => ref !== null && ref !== undefined && ref !== '');
+    // Usamos Promise.all para buscar duplicados para cada venta en paralelo.
+    const enrichedRows = await Promise.all(
+        data.map(async (sale) => {
+            // Si no hay referencia o es muy corta, no buscamos duplicados.
+            if (!sale.paymentReference || sale.paymentReference.length < 4) {
+                return { ...sale, similarReferences: [] };
+            }
 
-    let allSimilarPurchases: Purchase[] = [];
+            const lastFourDigits = sale.paymentReference.slice(-4);
+            
+            // Replicamos la lógica simple y efectiva de tu función `getSaleDetails`
+            const similarResults = await db.query.purchases.findMany({
+                where: and(
+                    // Busca tanto coincidencias exactas como por los últimos 4 dígitos
+                    or(
+                        eq(purchases.paymentReference, sale.paymentReference),
+                        like(purchases.paymentReference, `%${lastFourDigits}`)
+                    ),
+                    ne(purchases.id, sale.id) // Excluye la propia venta de los resultados
+                ),
+                orderBy: desc(purchases.createdAt),
+                limit: 10 // Limitamos para evitar sobrecarga
+            });
 
-    if (paymentReferences.length > 0) {
-      const likeConditions = paymentReferences.map(ref => {
-        const fullMatch = eq(purchases.paymentReference, ref);
-        return ref.length >= 4 ? or(fullMatch, like(purchases.paymentReference, `%${ref.slice(-4)}`)) : fullMatch;
-      });
-
-      const similarResults = await db.select()
-        .from(purchases)
-        .where(and(
-          or(...likeConditions),
-          not(inArray(purchases.id, saleIds))
-        ))
-        .orderBy(desc(purchases.createdAt))
-        .limit(50);
-      
-      allSimilarPurchases = similarResults as Purchase[];
-    }
-
-    const enrichedRows = data.map(sale => {
-      const exactDuplicate = allSimilarPurchases.find(p => p.paymentReference && sale.paymentReference && p.paymentReference === sale.paymentReference);
-      const similarReferences = allSimilarPurchases.filter(p => p.paymentReference && sale.paymentReference && p.paymentReference.length >= 4 && p.paymentReference.slice(-4) === sale.paymentReference.slice(-4));
-      
-      const combinedSimilar = [...new Map([...(exactDuplicate ? [exactDuplicate] : []), ...similarReferences].map(item => [item.id, item])).values()];
-
-      return {
-        ...sale,
-        similarReferences: combinedSimilar,
-      };
-    });
+            return {
+                ...sale,
+                similarReferences: similarResults as Purchase[],
+            };
+        })
+    );
 
     // --- 4. DEVOLVER LOS DATOS ENRIQUECIDOS ---
     return {
