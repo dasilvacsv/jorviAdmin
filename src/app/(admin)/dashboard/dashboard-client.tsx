@@ -4,13 +4,11 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { PurchaseDetailsModal } from '@/components/rifas/purchase-details-modal';
-import { DollarSign, ShoppingCart, Clock, CheckCircle, Trophy, BarChart2, Ticket, ChevronDown, XCircle } from 'lucide-react';
+import { DollarSign, ShoppingCart, Clock, CheckCircle, Trophy, BarChart2, Ticket, XCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import CountUp from 'react-countup';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Fragment, useMemo } from 'react';
-import { Button } from '@/components/ui/button';
+import { useMemo } from 'react';
 
 // --- TIPOS DE DATOS ---
 type PurchaseWithTickets = {
@@ -23,9 +21,11 @@ type PurchaseWithTickets = {
     tickets?: { ticketNumber: string }[];
 };
 
+// ✅ TIPO 'TopBuyer' ACTUALIZADO: Se añade buyerPhone
 type TopBuyer = {
     buyerName: string | null;
     buyerEmail: string;
+    buyerPhone: string | null; // Se añade el teléfono
     totalTickets: number;
     totalAmountUsd: number;
     totalAmountVes: number;
@@ -45,7 +45,7 @@ type DashboardClientProps = {
 };
 
 
-// --- COMPONENTES DE UI REUTILIZABLES ---
+// --- COMPONENTES DE UI REUTILIZABLES (Sin cambios) ---
 
 const StatCard = ({ title, value, icon: Icon, isCurrency = false, currencySymbol = '' }: { title: string, value: number, icon: React.ElementType, isCurrency?: boolean, currencySymbol?: string }) => (
     <Card>
@@ -68,7 +68,7 @@ const PurchaseStatusChart = ({ confirmed, pending, rejected }: { confirmed: numb
         { name: 'Pendientes', value: pending },
         { name: 'Rechazadas', value: rejected }
     ];
-    const COLORS = ['#10B981', '#F59E0B', '#EF4444']; // Verde, Ámbar, Rojo
+    const COLORS = ['#10B981', '#F59E0B', '#EF4444'];
 
     const chartData = originalData.filter(entry => entry.value > 0);
 
@@ -90,30 +90,6 @@ const PurchaseStatusChart = ({ confirmed, pending, rejected }: { confirmed: numb
         </ResponsiveContainer>
     );
 };
-
-
-// --- COMPONENTES ESPECÍFICOS PARA EL DASHBOARD ---
-
-// Este componente ya no se usa en la tabla de pendientes, pero se puede mantener por si se usa en otro lugar.
-function TicketDetailContent({ purchase }: { purchase: PurchaseWithTickets }) {
-    const sortedTickets = useMemo(() =>
-        [...(purchase.tickets || [])].sort((a, b) => a.ticketNumber.localeCompare(b.ticketNumber, undefined, { numeric: true })),
-        [purchase.tickets]
-    );
-    return (
-        <div className="p-4 bg-slate-100 dark:bg-slate-900">
-            <h4 className="font-semibold text-xs mb-2 text-gray-700 dark:text-gray-300 uppercase tracking-wider">Tickets Asignados ({purchase.tickets?.length || 0})</h4>
-            <div className="flex flex-wrap gap-1">
-                {sortedTickets.length > 0 ? (
-                    sortedTickets.map(({ ticketNumber }) => (<Badge key={ticketNumber} variant="secondary" className="font-mono text-xs">{ticketNumber}</Badge>))
-                ) : (
-                    <p className="text-sm text-muted-foreground italic">No hay tickets asignados a esta venta.</p>
-                )}
-            </div>
-        </div>
-    );
-}
-
 
 // --- COMPONENTE PRINCIPAL DEL CLIENTE ---
 export function DashboardClient({ stats, revenueUsd, revenueVes, pendingPurchasesList, topBuyersList }: DashboardClientProps) {
@@ -140,7 +116,6 @@ export function DashboardClient({ stats, revenueUsd, revenueVes, pendingPurchase
                                     <TableHeader><TableRow><TableHead>Comprador</TableHead><TableHead className="hidden sm:table-cell">Rifa</TableHead><TableHead className="text-right">Monto</TableHead><TableHead className="text-right">Acción</TableHead></TableRow></TableHeader>
                                     <TableBody>
                                         {pendingPurchasesList?.length > 0 ? (pendingPurchasesList.map((purchase) => (
-                                            // --- CÓDIGO CORREGIDO ---
                                             <TableRow key={purchase.id}>
                                                 <TableCell>
                                                     <div className="font-medium">{purchase.buyerName}</div>
@@ -156,7 +131,6 @@ export function DashboardClient({ stats, revenueUsd, revenueVes, pendingPurchase
                                                     <PurchaseDetailsModal purchase={purchase} raffleCurrency={purchase.raffle?.currency} />
                                                 </TableCell>
                                             </TableRow>
-                                            // --- FIN DEL CÓDIGO CORREGIDO ---
                                         )))
                                         : (<TableRow><TableCell colSpan={4} className="h-24 text-center">¡Todo al día! No hay compras pendientes.</TableCell></TableRow>
                                         )}
@@ -188,7 +162,8 @@ export function DashboardClient({ stats, revenueUsd, revenueVes, pendingPurchase
                                 <div className="space-y-4">
                                     {topBuyersList?.length > 0 ? (
                                         topBuyersList.map((buyer) => (
-                                            <div key={buyer.buyerEmail} className="flex items-center justify-between gap-2 text-sm">
+                                            // ✅ CAMBIO DE KEY: Se usa el teléfono como clave única.
+                                            <div key={buyer.buyerPhone} className="flex items-center justify-between gap-2 text-sm">
                                                 <div className="flex-grow min-w-0">
                                                     <p className="font-semibold truncate">{buyer.buyerName || 'Anónimo'}</p>
                                                     <p className="text-xs text-muted-foreground truncate">{buyer.buyerEmail}</p>

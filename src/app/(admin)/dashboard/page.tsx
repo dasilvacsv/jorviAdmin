@@ -1,13 +1,14 @@
 // app/dashboard/page.tsx
 
 import { tickets, purchases, raffles } from '@/lib/db/schema';
-import { eq, count, desc, sql, sum } from 'drizzle-orm';
+// ✅ IMPORTACIONES ACTUALIZADAS: Se añaden 'and', 'isNotNull' y 'ne' para la nueva consulta
+import { eq, count, desc, sql, sum, and, isNotNull, ne } from 'drizzle-orm';
 import { DashboardClient } from './dashboard-client';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { PlusCircle } from 'lucide-react';
 import { db } from '@/db';
-import { ExportCustomersButton } from '@/components/dashboard/ExportCustomersButton'; // Botón de exportación importado
+import { ExportCustomersButton } from '@/components/dashboard/ExportCustomersButton';
 
 async function getDashboardData() {
     const [
@@ -36,17 +37,25 @@ async function getDashboardData() {
             limit: 5,
         }),
 
+        // ✅ LÓGICA DE TOP COMPRADORES MODIFICADA
         db.select({
-            buyerName: purchases.buyerName,
-            buyerEmail: purchases.buyerEmail,
+            // Se usa MAX() para obtener un nombre y email consistentes para el grupo.
+            buyerName: sql<string>`max(${purchases.buyerName})`.as('buyer_name'),
+            buyerEmail: sql<string>`max(${purchases.buyerEmail})`.as('buyer_email'),
+            buyerPhone: purchases.buyerPhone, // Se selecciona el teléfono para usarlo como 'key'.
             totalTickets: sql<number>`sum(${purchases.ticketCount})`.mapWith(Number),
             totalAmountUsd: sql<number>`sum(CASE WHEN ${raffles.currency} = 'USD' THEN ${purchases.amount}::decimal ELSE 0 END)`.mapWith(Number),
             totalAmountVes: sql<number>`sum(CASE WHEN ${raffles.currency} = 'VES' THEN ${purchases.amount}::decimal ELSE 0 END)`.mapWith(Number),
         })
         .from(purchases)
         .leftJoin(raffles, eq(purchases.raffleId, raffles.id))
-        .where(eq(purchases.status, 'confirmed'))
-        .groupBy(purchases.buyerEmail, purchases.buyerName)
+        // Se filtran compras confirmadas y con un número de teléfono válido.
+        .where(and(
+            eq(purchases.status, 'confirmed'),
+            isNotNull(purchases.buyerPhone),
+            ne(purchases.buyerPhone, '')
+        ))
+        .groupBy(purchases.buyerPhone) // La clave de agrupación ahora es el teléfono.
         .orderBy(desc(sql`sum(${purchases.ticketCount})`))
         .limit(5),
     ]);
@@ -67,6 +76,7 @@ async function getDashboardData() {
     };
 }
 
+// --- Componente de Página (Sin cambios) ---
 export default async function DashboardPage() {
     const data = await getDashboardData();
     const primaryButtonClasses = "font-semibold text-white bg-gradient-to-r from-amber-500 to-orange-600 hover:shadow-lg hover:shadow-orange-500/40 transition-all duration-300 ease-in-out transform hover:scale-105";
@@ -88,7 +98,6 @@ export default async function DashboardPage() {
                         <p className="text-muted-foreground">Un resumen de la actividad reciente.</p>
                     </div>
                     <div className="hidden lg:block">
-                        {/* CONTENEDOR ACTUALIZADO PARA LOS BOTONES */}
                         <div className="flex items-center gap-2">
                             <ExportCustomersButton />
                             <Link href="/rifas/nuevo">
