@@ -1,4 +1,3 @@
-// components/rifas/bingo-view.tsx
 "use client";
 
 import { useState, useMemo, useRef, useEffect } from 'react';
@@ -16,36 +15,47 @@ type PurchaseInfo = { id: string; buyerName: string | null; buyerEmail: string; 
 type TicketWithPurchase = { id: string; ticketNumber: string; status: 'available' | 'reserved' | 'sold'; purchase: PurchaseInfo | null; };
 type RaffleInfo = { id: string; name: string; minimumTickets: number; price: string; currency: 'USD' | 'VES'; limitDate: Date; };
 
-// --- CONSTANTES DE DISEÑO ---
-const GRID_COLS = { DEFAULT: 10, SM: 15, MD: 20, LG: 25, XL: 30 };
-const TICKET_SIZE_PX = 32; // Altura del ticket
-const TICKET_GAP_PX = 6;  // Gap entre tickets
+// --- CONSTANTES DE DISEÑO RESPONSIVE ---
+const GRID_COLS = { 
+  XS: 6,      // < 480px
+  SM: 8,      // 480px - 640px
+  MD: 12,     // 640px - 768px
+  LG: 16,     // 768px - 1024px
+  XL: 20,     // 1024px - 1280px
+  XXL: 25     // > 1280px
+};
+const TICKET_SIZE_PX = 32;
+const TICKET_GAP_PX = 4;
 
 // --- FUNCIÓN AUXILIAR ---
 const formatCurrency = (amount: number | string, currency: 'USD' | 'VES') => new Intl.NumberFormat('es-VE', {
     style: 'currency', currency, minimumFractionDigits: 2
 }).format(typeof amount === 'string' ? parseFloat(amount) : amount);
 
-
-// --- COMPONENTE PRINCIPAL CON DISEÑO DE PANEL ---
+// --- COMPONENTE PRINCIPAL RESPONSIVE ---
 export function BingoView({ raffle, initialTickets }: { raffle: RaffleInfo; initialTickets: TicketWithPurchase[] }) {
     const [selectedSearchValue, setSelectedSearchValue] = useState<string | null>(null);
     const parentRef = useRef<HTMLDivElement>(null);
-    const [columns, setColumns] = useState(GRID_COLS.DEFAULT);
+    const [columns, setColumns] = useState(GRID_COLS.MD);
+    const [isMobile, setIsMobile] = useState(false);
 
-    // Este useEffect es necesario para que el virtualizador de filas sepa cuántos elementos mostrar por fila.
+    // Responsive handler mejorado
     useEffect(() => {
         const handleResize = () => {
             if (!parentRef.current) return;
-            const width = parentRef.current.offsetWidth;
-            if (width >= 1280) setColumns(GRID_COLS.XL);
+            const width = window.innerWidth;
+            setIsMobile(width < 768);
+            
+            // Determinar número de columnas basado en el ancho total de la ventana
+            if (width >= 1400) setColumns(GRID_COLS.XXL);
+            else if (width >= 1280) setColumns(GRID_COLS.XL);
             else if (width >= 1024) setColumns(GRID_COLS.LG);
             else if (width >= 768) setColumns(GRID_COLS.MD);
             else if (width >= 640) setColumns(GRID_COLS.SM);
-            else setColumns(GRID_COLS.DEFAULT);
+            else setColumns(GRID_COLS.XS);
         };
 
-        handleResize(); // Llama una vez al inicio
+        handleResize();
         window.addEventListener('resize', handleResize);
         return () => window.removeEventListener('resize', handleResize);
     }, []);
@@ -109,104 +119,183 @@ export function BingoView({ raffle, initialTickets }: { raffle: RaffleInfo; init
     const totalHeight = rowVirtualizer.getTotalSize();
 
     return (
-        <div className="flex flex-col lg:flex-row gap-6">
-            {/* Panel Izquierdo - Información y Búsqueda */}
-            <div className="lg:w-[320px] xl:w-[360px] space-y-4 flex-shrink-0">
-                <div className="bg-white rounded-xl shadow-lg p-6 border border-slate-200">
-                    <h2 className="text-xl font-bold text-gray-900 mb-4">{raffle.name}</h2>
-                    <Image
-                        src="/assets/bingo-bg.png" // Corregido a .png
-                        alt="Rifa Banner"
-                        width={300} height={150}
-                        className="w-full h-32 object-cover rounded-lg mb-4 opacity-90"
-                    />
-                    <div className="space-y-3 text-sm text-gray-700">
-                        <div className="flex items-center gap-2"><Ticket className="h-4 w-4 text-blue-500" /><span>Total Tickets: 10,000</span></div>
-                        <div className="flex items-center gap-2"><HandCoins className="h-4 w-4 text-green-500" /><span>Precio: {formatCurrency(raffle.price, raffle.currency)}</span></div>
-                        <div className="flex items-center gap-2"><CalendarDays className="h-4 w-4 text-purple-500" /><span>Sorteo: {new Date(raffle.limitDate).toLocaleDateString('es-VE')}</span></div>
+        <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-2 sm:p-4 lg:p-6">
+            <div className="max-w-7xl mx-auto">
+                <div className="flex flex-col xl:flex-row gap-4 lg:gap-6">
+                    {/* Panel Superior/Izquierdo - Información y Búsqueda */}
+                    <div className="w-full xl:w-80 2xl:w-96 flex-shrink-0">
+                        {/* Card de información de la rifa */}
+                        <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 border border-slate-200 mb-4">
+                            <h2 className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900 mb-4 line-clamp-2">{raffle.name}</h2>
+                            
+                            <div className="relative mb-4">
+                                <Image
+                                    src="/assets/bingo-bg.png"
+                                    alt="Rifa Banner"
+                                    width={300} 
+                                    height={150}
+                                    className="w-full h-24 sm:h-32 object-cover rounded-lg opacity-90"
+                                />
+                            </div>
+                            
+                            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-1 gap-3 text-sm sm:text-base text-gray-700">
+                                <div className="flex items-center gap-2">
+                                    <Ticket className="h-4 w-4 text-blue-500 flex-shrink-0" />
+                                    <span className="truncate">Total: 10,000 tickets</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <HandCoins className="h-4 w-4 text-green-500 flex-shrink-0" />
+                                    <span className="truncate">Precio: {formatCurrency(raffle.price, raffle.currency)}</span>
+                                </div>
+                                <div className="flex items-center gap-2 sm:col-span-2 xl:col-span-1">
+                                    <CalendarDays className="h-4 w-4 text-purple-500 flex-shrink-0" />
+                                    <span className="truncate">Sorteo: {new Date(raffle.limitDate).toLocaleDateString('es-VE')}</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        {/* Buscador - Sticky en desktop, normal en mobile */}
+                        <div className={cn("bg-white rounded-xl shadow-lg p-4 border border-slate-200", 
+                            !isMobile && "xl:sticky xl:top-6")}>
+                            <BingoSearch 
+                                options={searchOptions} 
+                                onSelect={setSelectedSearchValue} 
+                                selectedOptionValue={selectedSearchValue} 
+                            />
+                            {selectedSearchValue && (
+                                <Button 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    onClick={() => setSelectedSearchValue(null)} 
+                                    className="mt-3 w-full text-blue-600 hover:text-blue-800 hover:bg-blue-50"
+                                >
+                                    Mostrar todos los tickets
+                                </Button>
+                            )}
+                        </div>
                     </div>
-                </div>
-                <div className="sticky top-6">
-                  <BingoSearch options={searchOptions} onSelect={setSelectedSearchValue} selectedOptionValue={selectedSearchValue} />
-                  {selectedSearchValue && (
-                      <Button variant="ghost" size="sm" onClick={() => setSelectedSearchValue(null)} className="mt-2 w-full text-blue-600 hover:text-blue-800">
-                          Mostrar todos los tickets
-                      </Button>
-                  )}
-                </div>
-            </div>
 
-            {/* Panel del Tablero de Bingo (Derecho) */}
-            <div className="flex-1 lg:min-w-0 bg-gradient-to-br from-slate-100 to-slate-200 rounded-xl shadow-xl p-4 border-2 border-slate-300 relative overflow-hidden">
-                <div className="absolute inset-0 bg-[url('/assets/bingo-pattern.svg')] opacity-10 pointer-events-none"></div>
-                
-                <h3 className="text-2xl font-bold text-slate-800 mb-4 text-center relative z-10">Tablero de la Rifa</h3>
+                    {/* Panel Principal - Tablero de Bingo */}
+                    <div className="flex-1 min-w-0">
+                        <div className="bg-gradient-to-br from-slate-100 to-slate-200 rounded-xl shadow-xl p-3 sm:p-4 lg:p-6 border-2 border-slate-300 relative overflow-hidden">
+                            {/* Background pattern */}
+                            <div className="absolute inset-0 bg-[url('/assets/bingo-pattern.svg')] opacity-10 pointer-events-none"></div>
+                            
+                            {/* Header */}
+                            <div className="relative z-10 mb-4 sm:mb-6">
+                                <h3 className="text-xl sm:text-2xl lg:text-3xl font-bold text-slate-800 text-center">
+                                    Tablero de la Rifa
+                                </h3>
+                                <p className="text-sm sm:text-base text-slate-600 text-center mt-2">
+                                    {columns} columnas • {filteredTickets.length.toLocaleString()} tickets
+                                </p>
+                            </div>
 
-                <div ref={parentRef} className="w-full h-[70vh] overflow-y-auto rounded-lg border border-slate-300 bg-white/70 backdrop-blur-sm shadow-inner p-3">
-                    <div className="relative" style={{ height: `${totalHeight}px` }}>
-                        <TooltipProvider delayDuration={150}>
-                            {virtualRows.map((virtualRow) => {
-                                const startIndex = virtualRow.index * columns;
-                                const endIndex = Math.min(startIndex + columns, filteredTickets.length);
-                                const rowTickets = filteredTickets.slice(startIndex, endIndex);
+                            {/* Tablero virtual */}
+                            <div 
+                                ref={parentRef} 
+                                className={cn(
+                                    "w-full overflow-y-auto rounded-lg border border-slate-300 bg-white/70 backdrop-blur-sm shadow-inner p-2 sm:p-3",
+                                    // Altura responsive
+                                    "h-[50vh] sm:h-[60vh] lg:h-[65vh] xl:h-[70vh]"
+                                )}
+                            >
+                                <div className="relative" style={{ height: `${totalHeight}px` }}>
+                                    <TooltipProvider delayDuration={150}>
+                                        {virtualRows.map((virtualRow) => {
+                                            const startIndex = virtualRow.index * columns;
+                                            const endIndex = Math.min(startIndex + columns, filteredTickets.length);
+                                            const rowTickets = filteredTickets.slice(startIndex, endIndex);
 
-                                return (
-                                    <div
-                                        key={virtualRow.key}
-                                        data-index={virtualRow.index}
-                                        ref={rowVirtualizer.measureElement}
-                                        className="absolute top-0 left-0 w-full"
-                                        style={{
-                                            transform: `translateY(${virtualRow.start}px)`,
-                                            display: 'grid',
-                                            gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
-                                            gap: `${TICKET_GAP_PX}px`,
-                                            paddingBottom: `${TICKET_GAP_PX}px`,
-                                        }}
-                                    >
-                                        {rowTickets.map((ticket) => {
-                                            const isOccupied = ticket.status !== 'available';
-                                            const isHighlighted = ticket.ticketNumber === selectedSearchValue || ticket.purchase?.buyerEmail === selectedSearchValue;
-                                            
-                                            const ticketCell = (
-                                                <div className={cn(
-                                                    'flex items-center justify-center h-8 w-full rounded-md font-mono text-xs sm:text-sm font-semibold relative',
-                                                    'transition-all duration-300 ease-in-out transform border shadow-sm',
-                                                    isOccupied
-                                                        ? 'bg-red-400 border-red-500 text-white hover:bg-red-500 cursor-pointer'
-                                                        : 'bg-green-200 border-green-300 text-green-800 hover:bg-green-300',
-                                                    isHighlighted && 'ring-4 ring-yellow-400 ring-offset-2 scale-110 shadow-lg z-20',
-                                                )}>
-                                                    {ticket.ticketNumber}
+                                            return (
+                                                <div
+                                                    key={virtualRow.key}
+                                                    data-index={virtualRow.index}
+                                                    ref={rowVirtualizer.measureElement}
+                                                    className="absolute top-0 left-0 w-full"
+                                                    style={{
+                                                        transform: `translateY(${virtualRow.start}px)`,
+                                                        display: 'grid',
+                                                        gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+                                                        gap: `${TICKET_GAP_PX}px`,
+                                                        paddingBottom: `${TICKET_GAP_PX}px`,
+                                                    }}
+                                                >
+                                                    {rowTickets.map((ticket) => {
+                                                        const isOccupied = ticket.status !== 'available';
+                                                        const isHighlighted = ticket.ticketNumber === selectedSearchValue || ticket.purchase?.buyerEmail === selectedSearchValue;
+                                                        
+                                                        const ticketCell = (
+                                                            <div className={cn(
+                                                                'flex items-center justify-center w-full rounded-md font-mono font-semibold relative',
+                                                                'transition-all duration-300 ease-in-out transform border shadow-sm cursor-pointer',
+                                                                // Tamaños responsive
+                                                                'h-6 text-xs sm:h-7 sm:text-xs md:h-8 md:text-sm',
+                                                                // Estados
+                                                                isOccupied
+                                                                    ? 'bg-red-400 border-red-500 text-white hover:bg-red-500 hover:scale-105'
+                                                                    : 'bg-green-200 border-green-300 text-green-800 hover:bg-green-300 hover:scale-105',
+                                                                // Highlight
+                                                                isHighlighted && 'ring-2 sm:ring-4 ring-yellow-400 ring-offset-1 sm:ring-offset-2 scale-105 sm:scale-110 shadow-lg z-20',
+                                                            )}>
+                                                                {ticket.ticketNumber}
+                                                            </div>
+                                                        );
+
+                                                        return isOccupied && ticket.purchase ? (
+                                                            <Tooltip key={ticket.id}>
+                                                                <TooltipTrigger asChild>{ticketCell}</TooltipTrigger>
+                                                                <TooltipContent side={isMobile ? 'top' : 'right'}>
+                                                                    <div className="flex flex-col gap-1.5 text-sm p-1">
+                                                                        <p className="font-bold">Ticket #{ticket.ticketNumber}</p>
+                                                                        <div className="flex items-center gap-2">
+                                                                            <User className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                                                            <span className="truncate">{ticket.purchase.buyerName || 'N/A'}</span>
+                                                                        </div>
+                                                                        <div className="flex items-center gap-2">
+                                                                            <Mail className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                                                            <span className="truncate text-xs">{ticket.purchase.buyerEmail}</span>
+                                                                        </div>
+                                                                        {ticket.purchase.buyerPhone && (
+                                                                            <div className="flex items-center gap-2">
+                                                                                <Phone className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                                                                <span className="truncate">{ticket.purchase.buyerPhone}</span>
+                                                                            </div>
+                                                                        )}
+                                                                        <Badge 
+                                                                            variant={ticket.purchase.status === 'confirmed' ? 'default' : 'secondary'} 
+                                                                            className="mt-1 w-fit self-start text-xs"
+                                                                        >
+                                                                            {ticket.purchase.status}
+                                                                        </Badge>
+                                                                    </div>
+                                                                </TooltipContent>
+                                                            </Tooltip>
+                                                        ) : (
+                                                            <div key={ticket.id}>
+                                                                {ticketCell}
+                                                            </div>
+                                                        );
+                                                    })}
                                                 </div>
                                             );
-
-                                            return isOccupied && ticket.purchase ? (
-                                                <Tooltip key={ticket.id}>
-                                                    <TooltipTrigger asChild>{ticketCell}</TooltipTrigger>
-                                                    <TooltipContent>
-                                                      <div className="flex flex-col gap-1.5 text-sm p-1">
-                                                          <p className="font-bold">Ticket #{ticket.ticketNumber}</p>
-                                                          <div className="flex items-center gap-2"><User className="h-4 w-4 text-muted-foreground" />{ticket.purchase.buyerName || 'N/A'}</div>
-                                                          <div className="flex items-center gap-2"><Mail className="h-4 w-4 text-muted-foreground" />{ticket.purchase.buyerEmail}</div>
-                                                          {ticket.purchase.buyerPhone && <div className="flex items-center gap-2"><Phone className="h-4 w-4 text-muted-foreground" />{ticket.purchase.buyerPhone}</div>}
-                                                          <Badge variant={ticket.purchase.status === 'confirmed' ? 'default' : 'secondary'} className="mt-1 w-fit-content self-start">{ticket.purchase.status}</Badge>
-                                                      </div>
-                                                    </TooltipContent>
-                                                </Tooltip>
-                                            ) : (ticketCell);
                                         })}
+                                    </TooltipProvider>
+                                </div>
+                            </div>
+                            
+                            {/* Empty state */}
+                            {filteredTickets.length === 0 && selectedSearchValue && (
+                                <div className="absolute inset-0 flex items-center justify-center bg-white/80 backdrop-blur-sm rounded-lg text-gray-600 z-30">
+                                    <div className="text-center p-4">
+                                        <p className="text-lg sm:text-xl font-semibold mb-2">No se encontraron tickets</p>
+                                        <p className="text-sm text-gray-500">Intenta con otro término de búsqueda</p>
                                     </div>
-                                );
-                            })}
-                        </TooltipProvider>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
-                {filteredTickets.length === 0 && selectedSearchValue && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-white/80 backdrop-blur-sm rounded-lg text-gray-600 z-30">
-                        <p className="text-xl font-semibold">No se encontraron tickets.</p>
-                    </div>
-                )}
             </div>
         </div>
     );
