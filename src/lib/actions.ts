@@ -463,7 +463,7 @@ async function sendTicketsEmailAndWhatsapp(purchaseId: string): Promise<void> {
   await sendEmail({ to: purchase.buyerEmail, subject, body: emailBody });
 
   // 2. Envío del mensaje de WhatsApp con verificación y manejo de errores
-  const whatsappText = `¡Hola, ${purchase.buyerName}! 🎉\n\nTu compra para la rifa *${purchase.raffle.name}* ha sido confirmada.\n\nAquí están tus tickets de la suerte:\n\n*${ticketNumbers}*\n\nEl sorteo será este mismo domingo 5/10/2025 a las 10pm, la plataforma cerrará a las 8pm.\n\nRecuerda que también tendremos un premio para el que tenga más tickets. Puedes ver el top de compradores aquí:\nhttps://www.llevateloconjorvi.com/top-compradores\n\nPor favor, únete a nuestro WhatsApp para las dinámicas donde puedes ganar con nosotros:\nhttps://chat.whatsapp.com/DJ7cNWxa7VPKcFpoQBdlyz\n\n¡Participa y gana! 😉`;
+  const whatsappText = `¡Hola, ${purchase.buyerName}! 🎉\n\nTu compra para la rifa *${purchase.raffle.name}* ha sido confirmada.\n\nAquí están tus tickets de la suerte:\n\n*${ticketNumbers}*\n\nEl sorteo será este mismo domingo 5/10/2025 a las 10pm por el Super Gana de la lotería del táchira https://supergana.com.ve/resultados.php, la plataforma cerrará a las 8pm.\n\nRecuerda que también tendremos un premio para el que tenga más tickets. Puedes ver el top de compradores aquí:\nhttps://www.llevateloconjorvi.com/top-compradores\n\nPor favor, únete a nuestro WhatsApp para las dinámicas donde puedes ganar con nosotros:\nhttps://chat.whatsapp.com/DJ7cNWxa7VPKcFpoQBdlyz\n\n¡Participa y gana! 😉`;
   
   // --- MEJORA CLAVE ---
   // Verificamos si existe el número de teléfono antes de intentar enviar.

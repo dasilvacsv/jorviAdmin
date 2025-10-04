@@ -127,7 +127,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
                 if (trulyNewPurchases.length > 0) {
                     // ✅ 3. LÓGICA PARA ELEGIR EL SONIDO
-                    const hasSpecialPurchase = trulyNewPurchases.some(p => p.ticketCount > 5);
+                    const hasSpecialPurchase = trulyNewPurchases.some(p => p.ticketCount > 20);
 
                     if (hasSpecialPurchase) {
                         specialAudioRef.current?.play().catch(console.error);
