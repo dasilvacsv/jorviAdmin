@@ -13,7 +13,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Play, Square, XCircle } from "lucide-react";
+import { Play, Square, XCircle, Pause, Trophy } from "lucide-react";
 import { useFormState, useFormStatus } from "react-dom";
 import { useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -84,6 +84,32 @@ export function StatusActions({ raffle }: StatusActionsProps) {
       <div className="flex gap-2">
         <AlertDialog>
           <AlertDialogTrigger asChild>
+            <Button size="sm" className="bg-orange-600 hover:bg-orange-700">
+              <Pause className="h-4 w-4 mr-1" /> Pausar
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>¿Pausar la rifa?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Se pausará la venta de tickets. Los participantes verán un mensaje de espera de resultados.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <form action={formAction}>
+                <input type="hidden" name="raffleId" value={raffle.id} />
+                <input type="hidden" name="status" value="postponed" />
+                <AlertDialogAction asChild>
+                  <SubmitButton className="bg-orange-600 hover:bg-orange-700">Sí, pausar</SubmitButton>
+                </AlertDialogAction>
+              </form>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+        
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
             <Button size="sm" className="bg-blue-600 hover:bg-blue-700">
               <Square className="h-4 w-4 mr-1" /> Finalizar
             </Button>
@@ -107,6 +133,7 @@ export function StatusActions({ raffle }: StatusActionsProps) {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+        
         <AlertDialog>
           <AlertDialogTrigger asChild>
             <Button size="sm" variant="destructive">
@@ -127,6 +154,64 @@ export function StatusActions({ raffle }: StatusActionsProps) {
                 <input type="hidden" name="status" value="cancelled" />
                 <AlertDialogAction asChild>
                   <SubmitButton variant="destructive">Sí, cancelar</SubmitButton>
+                </AlertDialogAction>
+              </form>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
+    );
+  }
+
+  if (raffle.status === 'postponed') {
+    return (
+      <div className="flex gap-2">
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button size="sm" className="bg-green-600 hover:bg-green-700">
+              <Play className="h-4 w-4 mr-1" /> Reanudar
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>¿Reanudar la rifa?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Se reanudará la venta de tickets y los participantes podrán seguir comprando.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <form action={formAction}>
+                <input type="hidden" name="raffleId" value={raffle.id} />
+                <input type="hidden" name="status" value="active" />
+                <AlertDialogAction asChild>
+                  <SubmitButton>Sí, reanudar</SubmitButton>
+                </AlertDialogAction>
+              </form>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button size="sm" className="bg-blue-600 hover:bg-blue-700">
+              <Trophy className="h-4 w-4 mr-1" /> Anunciar Ganador
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>¿Finalizar y proceder al sorteo?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Se finalizará la rifa y podrás registrar el ganador. Esta acción no se puede deshacer.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <form action={formAction}>
+                <input type="hidden" name="raffleId" value={raffle.id} />
+                <input type="hidden" name="status" value="finished" />
+                <AlertDialogAction asChild>
+                  <SubmitButton>Sí, finalizar</SubmitButton>
                 </AlertDialogAction>
               </form>
             </AlertDialogFooter>
