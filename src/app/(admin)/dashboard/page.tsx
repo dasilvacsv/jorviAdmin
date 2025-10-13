@@ -1,7 +1,6 @@
 // app/dashboard/page.tsx
 
 import { tickets, purchases, raffles } from '@/lib/db/schema';
-// ✅ IMPORTACIONES ACTUALIZADAS: Se añaden 'and', 'isNotNull' y 'ne' para la nueva consulta
 import { eq, count, desc, sql, sum, and, isNotNull, ne } from 'drizzle-orm';
 import { DashboardClient } from './dashboard-client';
 import { Button } from '@/components/ui/button';
@@ -16,6 +15,7 @@ async function getDashboardData() {
         pendingPurchasesList,
         topBuyersList,
     ] = await Promise.all([
+        // Consulta de estadísticas generales (SIN CAMBIOS, muestra datos históricos)
         db.select({
             totalPurchases: count(),
             pendingPurchases: sql<number>`count(CASE WHEN ${purchases.status} = 'pending' THEN 1 END)`.mapWith(Number),
@@ -27,6 +27,7 @@ async function getDashboardData() {
         .from(purchases)
         .leftJoin(raffles, eq(purchases.raffleId, raffles.id)),
         
+        // Consulta de compras pendientes (SIN CAMBIOS, es importante ver todas las pendientes)
         db.query.purchases.findMany({
             where: eq(purchases.status, 'pending'),
             with: { 
@@ -39,23 +40,24 @@ async function getDashboardData() {
 
         // ✅ LÓGICA DE TOP COMPRADORES MODIFICADA
         db.select({
-            // Se usa MAX() para obtener un nombre y email consistentes para el grupo.
             buyerName: sql<string>`max(${purchases.buyerName})`.as('buyer_name'),
             buyerEmail: sql<string>`max(${purchases.buyerEmail})`.as('buyer_email'),
-            buyerPhone: purchases.buyerPhone, // Se selecciona el teléfono para usarlo como 'key'.
+            buyerPhone: purchases.buyerPhone,
             totalTickets: sql<number>`sum(${purchases.ticketCount})`.mapWith(Number),
             totalAmountUsd: sql<number>`sum(CASE WHEN ${raffles.currency} = 'USD' THEN ${purchases.amount}::decimal ELSE 0 END)`.mapWith(Number),
             totalAmountVes: sql<number>`sum(CASE WHEN ${raffles.currency} = 'VES' THEN ${purchases.amount}::decimal ELSE 0 END)`.mapWith(Number),
         })
         .from(purchases)
-        .leftJoin(raffles, eq(purchases.raffleId, raffles.id))
-        // Se filtran compras confirmadas y con un número de teléfono válido.
+        // Usamos innerJoin para asegurar que solo contamos compras de rifas existentes
+        .innerJoin(raffles, eq(purchases.raffleId, raffles.id))
+        // Se añade la condición para filtrar solo por rifas activas
         .where(and(
             eq(purchases.status, 'confirmed'),
             isNotNull(purchases.buyerPhone),
-            ne(purchases.buyerPhone, '')
+            ne(purchases.buyerPhone, ''),
+            eq(raffles.status, 'active') // <-- ¡CAMBIO APLICADO AQUÍ!
         ))
-        .groupBy(purchases.buyerPhone) // La clave de agrupación ahora es el teléfono.
+        .groupBy(purchases.buyerPhone)
         .orderBy(desc(sql`sum(${purchases.ticketCount})`))
         .limit(5),
     ]);
