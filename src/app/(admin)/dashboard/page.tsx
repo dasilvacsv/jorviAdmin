@@ -15,7 +15,7 @@ async function getDashboardData() {
         pendingPurchasesList,
         topBuyersList,
     ] = await Promise.all([
-        // Consulta de estadísticas generales (SIN CAMBIOS, muestra datos históricos)
+        // 🚨 CAMBIO APLICADO AQUÍ: Consulta de estadísticas generales. Ahora SOLO cuenta compras de rifas 'active'.
         db.select({
             totalPurchases: count(),
             pendingPurchases: sql<number>`count(CASE WHEN ${purchases.status} = 'pending' THEN 1 END)`.mapWith(Number),
@@ -25,7 +25,9 @@ async function getDashboardData() {
             totalRevenueVes: sql<number>`sum(CASE WHEN ${purchases.status} = 'confirmed' AND ${raffles.currency} = 'VES' THEN ${purchases.amount}::decimal ELSE 0 END)`.mapWith(Number),
         })
         .from(purchases)
-        .leftJoin(raffles, eq(purchases.raffleId, raffles.id)),
+        // Se usa INNER JOIN (o LEFT JOIN) y se añade un `where`
+        .leftJoin(raffles, eq(purchases.raffleId, raffles.id))
+        .where(eq(raffles.status, 'active')), // <-- 🎯 ¡ESTE ES EL CAMBIO!
         
         // Consulta de compras pendientes (SIN CAMBIOS, es importante ver todas las pendientes)
         db.query.purchases.findMany({
@@ -38,7 +40,7 @@ async function getDashboardData() {
             limit: 5,
         }),
 
-        // ✅ LÓGICA DE TOP COMPRADORES MODIFICADA
+        // LÓGICA DE TOP COMPRADORES (YA FUE MODIFICADA PREVIAMENTE)
         db.select({
             buyerName: sql<string>`max(${purchases.buyerName})`.as('buyer_name'),
             buyerEmail: sql<string>`max(${purchases.buyerEmail})`.as('buyer_email'),
@@ -50,12 +52,12 @@ async function getDashboardData() {
         .from(purchases)
         // Usamos innerJoin para asegurar que solo contamos compras de rifas existentes
         .innerJoin(raffles, eq(purchases.raffleId, raffles.id))
-        // Se añade la condición para filtrar solo por rifas activas
+        // Esta sección ya tenía la condición `eq(raffles.status, 'active')`
         .where(and(
             eq(purchases.status, 'confirmed'),
             isNotNull(purchases.buyerPhone),
             ne(purchases.buyerPhone, ''),
-            eq(raffles.status, 'active') // <-- ¡CAMBIO APLICADO AQUÍ!
+            eq(raffles.status, 'active')
         ))
         .groupBy(purchases.buyerPhone)
         .orderBy(desc(sql`sum(${purchases.ticketCount})`))
