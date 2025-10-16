@@ -6,8 +6,34 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { exportCustomersAction } from '@/lib/actions';
 import { Download } from 'lucide-react';
-import * as XLSX from 'xlsx'; // Librería para generar el Excel
+import { saveAs } from 'file-saver'; // Librería para descargar archivos
 import { toast } from 'sonner'; // Asumo que usas sonner para notificaciones, si no, puedes usar alert()
+
+// Función para convertir datos JSON a formato CSV
+function convertToCSV(data: any[]): string {
+    if (!data || data.length === 0) return '';
+    
+    // Obtener las claves del primer objeto para los headers
+    const headers = Object.keys(data[0]);
+    
+    // Crear la fila de headers
+    const csvHeaders = headers.join(',');
+    
+    // Crear las filas de datos
+    const csvRows = data.map(row => {
+        return headers.map(header => {
+            const value = row[header];
+            // Escapar comillas y envolver en comillas si contiene comas o comillas
+            if (typeof value === 'string' && (value.includes(',') || value.includes('"') || value.includes('\n'))) {
+                return `"${value.replace(/"/g, '""')}"`;
+            }
+            return value || '';
+        }).join(',');
+    });
+    
+    // Combinar headers y filas
+    return [csvHeaders, ...csvRows].join('\n');
+}
 
 export function ExportCustomersButton() {
     const [isExporting, setIsExporting] = useState(false);
@@ -22,24 +48,14 @@ export function ExportCustomersButton() {
             const result = await exportCustomersAction();
 
             if (result.success && Array.isArray(result.data)) {
-                // 1. Crear una nueva hoja de cálculo a partir de los datos JSON
-                const worksheet = XLSX.utils.json_to_sheet(result.data);
+                // 1. Convertir los datos JSON a formato CSV
+                const csvContent = convertToCSV(result.data);
 
-                // 2. Crear un nuevo libro de trabajo
-                const workbook = XLSX.utils.book_new();
+                // 2. Crear un blob con el contenido CSV
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
 
-                // 3. Añadir la hoja de cálculo al libro de trabajo
-                XLSX.utils.book_append_sheet(workbook, worksheet, "Clientes");
-
-                // 4. Establecer anchos de columna (opcional, pero mejora la visualización)
-                worksheet['!cols'] = [
-                    { wch: 30 }, // Ancho para 'nombre'
-                    { wch: 35 }, // Ancho para 'correo'
-                    { wch: 20 }, // Ancho para 'telefono'
-                ];
-
-                // 5. Generar el archivo y activar la descarga
-                XLSX.writeFile(workbook, "clientes_unicos_meta.xlsx");
+                // 3. Generar el archivo y activar la descarga
+                saveAs(blob, "clientes_unicos_meta.csv");
 
                 toast.success("¡Exportación completada!", {
                     description: `Se ha descargado el archivo con ${result.data.length} clientes.`,
@@ -67,7 +83,7 @@ export function ExportCustomersButton() {
             ) : (
                 <>
                     <Download className="mr-2 h-4 w-4" />
-                    Exportar Clientes (Meta)
+                    Exportar Clientes (CSV)
                 </>
             )}
         </Button>
